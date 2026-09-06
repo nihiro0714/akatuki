@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YUマーケット｜出品情報の入力</title>
+  <style>
+    :root {
+      --fill: #d9d9d9;
+      --fill-hover: #cccccc;
+      --text: #1a1a1a;
+      --muted: #767676;
+      --error: #c0392b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--text);
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic",
+        "Noto Sans JP", Meiryo, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .screen {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100%;
+      padding: 20px 20px 48px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+    }
+
+    .back {
+      padding: 6px 2px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .back:hover {
+      text-decoration: underline;
+    }
+
+    /* 写真 */
+    .photo {
+      position: relative;
+      display: block;
+      width: 72%;
+      margin: 0 auto;
+      padding: 0;
+      aspect-ratio: 1 / 1;
+      border: none;
+      background: var(--fill);
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .photo:hover {
+      background: var(--fill-hover);
+    }
+
+    .photo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .photo.invalid {
+      outline: 1px solid var(--error);
+    }
+
+    .photo-remove {
+      display: block;
+      margin: 8px auto 0;
+      padding: 0;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--muted);
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .photo-remove[hidden] {
+      display: none;
+    }
+
+    .photo-error {
+      margin: 6px 0 0;
+      min-height: 16px;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--error);
+      text-align: center;
+    }
+
+    /* 入力 */
+    .form {
+      margin-top: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .field label.caption {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    .field input[type="text"],
+    .field textarea {
+      display: block;
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: var(--fill);
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+      resize: vertical;
+    }
+
+    .field input[type="text"] {
+      height: 44px;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      outline: none;
+      border-color: #8a8a8a;
+    }
+
+    .field .invalid {
+      border-color: var(--error);
+    }
+
+    .error {
+      margin: 4px 0 0;
+      min-height: 16px;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--error);
+    }
+
+    /* 選択行 */
+    .picker-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      width: 100%;
+      min-height: 42px;
+      padding: 10px 14px;
+      border: 1px solid transparent;
+      background: var(--fill);
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .picker-toggle:hover {
+      background: var(--fill-hover);
+    }
+
+    .picker-toggle.invalid {
+      border-color: var(--error);
+    }
+
+    .picker-toggle .chosen {
+      margin-left: auto;
+      color: var(--muted);
+    }
+
+    .picker-toggle .mark {
+      width: 12px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .picker-panel {
+      display: flex;
+      flex-direction: column;
+      margin-top: 6px;
+      background: #f4f4f4;
+    }
+
+    .picker-panel[hidden] {
+      display: none;
+    }
+
+    .picker-panel label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .picker-panel input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .picker-panel .box {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--fill);
+    }
+
+    .picker-panel input:checked + .box {
+      background: #6b6b6b;
+    }
+
+    .picker-panel input:focus-visible + .box {
+      outline: 1px solid var(--text);
+      outline-offset: 2px;
+    }
+
+    /* 送信 */
+    .actions {
+      margin-top: 22px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .submit {
+      width: 180px;
+      height: 52px;
+      border: none;
+      border-radius: 0;
+      background: var(--fill);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+
+    .submit:hover {
+      background: var(--fill-hover);
+    }
+
+    .submit:disabled {
+      color: var(--muted);
+      cursor: default;
+    }
+
+    .note {
+      margin: 14px 0 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .note[hidden] {
+      display: none;
+    }
+
+    .actions[hidden] {
+      display: none;
+    }
+
+    .submit.secondary {
+      background: #f0f0f0;
+    }
+
+    .submit.secondary:hover {
+      background: #e6e6e6;
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <div class="header">
+      <button type="button" class="back" id="back">←</button>
+      <h1>出品情報の入力</h1>
+    </div>
+
+    <button type="button" class="photo" id="photo">
+      <span id="photo-placeholder">写真を追加</span>
+    </button>
+    <input type="file" id="photo-input" accept="image/*" hidden>
+    <button type="button" class="photo-remove" id="photo-remove" hidden>写真を削除</button>
+    <p class="photo-error" id="photo-error" role="alert"></p>
+
+    <form class="form" id="form" novalidate>
+      <div class="field">
+        <label class="caption" for="name">商品名</label>
+        <input type="text" id="name" name="name" maxlength="40" autocomplete="off">
+        <p class="error" id="name-error" role="alert"></p>
+      </div>
+
+      <div class="field" data-key="category">
+        <button type="button" class="picker-toggle" aria-expanded="false" aria-controls="panel-category">
+          カテゴリー<span class="chosen"></span><span class="mark" aria-hidden="true">＋</span>
+        </button>
+        <div class="picker-panel" id="panel-category" hidden></div>
+        <p class="error" id="category-error" role="alert"></p>
+      </div>
+
+      <div class="field" data-key="condition">
+        <button type="button" class="picker-toggle" aria-expanded="false" aria-controls="panel-condition">
+          商品の状態<span class="chosen"></span><span class="mark" aria-hidden="true">＋</span>
+        </button>
+        <div class="picker-panel" id="panel-condition" hidden></div>
+        <p class="error" id="condition-error" role="alert"></p>
+      </div>
+
+      <div class="field" data-key="period">
+        <button type="button" class="picker-toggle" aria-expanded="false" aria-controls="panel-period">
+          受け渡し可能期間<span class="chosen"></span><span class="mark" aria-hidden="true">＋</span>
+        </button>
+        <div class="picker-panel" id="panel-period" hidden></div>
+        <p class="error" id="period-error" role="alert"></p>
+      </div>
+
+      <div class="field" data-key="place">
+        <button type="button" class="picker-toggle" aria-expanded="false" aria-controls="panel-place">
+          受け渡し場所<span class="chosen"></span><span class="mark" aria-hidden="true">＋</span>
+        </button>
+        <div class="picker-panel" id="panel-place" hidden></div>
+        <p class="error" id="place-error" role="alert"></p>
+      </div>
+
+      <div class="field">
+        <label class="caption" for="description">商品の説明</label>
+        <textarea id="description" name="description" rows="6" maxlength="1000"></textarea>
+        <p class="error" id="description-error" role="alert"></p>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="submit" id="submit">出品する</button>
+      </div>
+      <p class="note" id="note" hidden></p>
+
+      <div class="actions" id="home-actions" hidden>
+        <button type="button" class="submit secondary" id="home">ホームに戻る</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var OPTIONS = {
+        category: ["家具", "家電", "教科書", "その他"],
+        condition: ["未使用に近い", "目立った傷なし", "やや傷や汚れあり", "傷や汚れあり", "書き込みあり"],
+        period: ["今週中", "今月中", "相談可"],
+        place: ["大学構内", "最寄り駅", "配送"]
+      };
+
+      var STORAGE_KEY = "listings";
+      var MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+      var form = document.getElementById("form");
+      var back = document.getElementById("back");
+      var photo = document.getElementById("photo");
+      var photoInput = document.getElementById("photo-input");
+      var photoRemove = document.getElementById("photo-remove");
+      var photoPlaceholder = document.getElementById("photo-placeholder");
+      var photoError = document.getElementById("photo-error");
+      var name = document.getElementById("name");
+      var description = document.getElementById("description");
+      var submit = document.getElementById("submit");
+      var note = document.getElementById("note");
+
+      var chosen = { category: "", condition: "", period: "", place: "" };
+      var photoDataUrl = "";
+
+      back.addEventListener("click", function () {
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+        window.location.href = "home.html";
+      });
+
+      document.getElementById("home").addEventListener("click", function () {
+        window.location.href = "home.html";
+      });
+
+      /* 写真 */
+      photo.addEventListener("click", function () {
+        photoInput.click();
+      });
+
+      photoInput.addEventListener("change", function () {
+        var file = photoInput.files && photoInput.files[0];
+        if (!file) return;
+
+        if (file.size > MAX_PHOTO_BYTES) {
+          photoError.textContent = "写真は5MB以内のファイルを選んでください";
+          photoInput.value = "";
+          return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function () {
+          photoDataUrl = String(reader.result);
+          photo.textContent = "";
+          var image = document.createElement("img");
+          image.src = photoDataUrl;
+          image.alt = "選択した商品写真";
+          photo.appendChild(image);
+          photoRemove.hidden = false;
+          photo.classList.remove("invalid");
+          photoError.textContent = "";
+        };
+        reader.onerror = function () {
+          photoError.textContent = "写真を読み込めませんでした";
+        };
+        reader.readAsDataURL(file);
+      });
+
+      photoRemove.addEventListener("click", function () {
+        photoDataUrl = "";
+        photoInput.value = "";
+        photo.textContent = "";
+        photoPlaceholder.textContent = "写真を追加";
+        photo.appendChild(photoPlaceholder);
+        photoRemove.hidden = true;
+      });
+
+      /* 選択行 */
+      function buildPickers() {
+        Array.prototype.forEach.call(form.querySelectorAll(".field[data-key]"), function (field) {
+          var key = field.dataset.key;
+          var panel = field.querySelector(".picker-panel");
+
+          OPTIONS[key].forEach(function (value) {
+            var label = document.createElement("label");
+
+            var input = document.createElement("input");
+            input.type = "radio";
+            input.name = key;
+            input.value = value;
+
+            var box = document.createElement("span");
+            box.className = "box";
+            box.setAttribute("aria-hidden", "true");
+
+            label.appendChild(input);
+            label.appendChild(box);
+            label.appendChild(document.createTextNode(value));
+            panel.appendChild(label);
+          });
+
+          panel.addEventListener("change", function (event) {
+            chosen[key] = event.target.value;
+            field.querySelector(".chosen").textContent = event.target.value;
+            field.querySelector(".picker-toggle").classList.remove("invalid");
+            field.querySelector(".error").textContent = "";
+            closePanel(field);
+          });
+        });
+      }
+
+      function closePanel(field) {
+        field.querySelector(".picker-toggle").setAttribute("aria-expanded", "false");
+        field.querySelector(".picker-panel").hidden = true;
+      }
+
+      form.addEventListener("click", function (event) {
+        var toggle = event.target.closest(".picker-toggle");
+        if (!toggle) return;
+
+        var panel = document.getElementById(toggle.getAttribute("aria-controls"));
+        var open = toggle.getAttribute("aria-expanded") === "true";
+        toggle.setAttribute("aria-expanded", String(!open));
+        panel.hidden = open;
+      });
+
+      /* 入力チェック */
+      function setError(element, output, text) {
+        output.textContent = text;
+        if (element) element.classList.toggle("invalid", Boolean(text));
+        return !text;
+      }
+
+      function validatePhoto() {
+        return setError(photo, photoError, photoDataUrl ? "" : "写真を1枚追加してください");
+      }
+
+      function validateName() {
+        var output = document.getElementById("name-error");
+        if (!name.value.trim()) {
+          return setError(name, output, "商品名を入力してください");
+        }
+        return setError(name, output, "");
+      }
+
+      function validateChoice(key, labelText) {
+        var field = form.querySelector('.field[data-key="' + key + '"]');
+        return setError(
+          field.querySelector(".picker-toggle"),
+          field.querySelector(".error"),
+          chosen[key] ? "" : labelText + "を選択してください"
+        );
+      }
+
+      function validateDescription() {
+        var output = document.getElementById("description-error");
+        if (!description.value.trim()) {
+          return setError(description, output, "商品の説明を入力してください");
+        }
+        return setError(description, output, "");
+      }
+
+      name.addEventListener("input", function () {
+        if (name.classList.contains("invalid")) validateName();
+      });
+      description.addEventListener("input", function () {
+        if (description.classList.contains("invalid")) validateDescription();
+      });
+
+      // 出品APIはまだ繋いでいないため、出品内容はこの端末のブラウザにだけ残る。
+      function storeListing(listing) {
+        try {
+          var saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || "[]");
+          saved.push(listing);
+          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(saved));
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        note.hidden = true;
+
+        var checks = [
+          validatePhoto(),
+          validateName(),
+          validateChoice("category", "カテゴリー"),
+          validateChoice("condition", "商品の状態"),
+          validateChoice("period", "受け渡し可能期間"),
+          validateChoice("place", "受け渡し場所"),
+          validateDescription()
+        ];
+
+        var firstNg = checks.indexOf(false);
+        if (firstNg !== -1) {
+          var targets = [photo, name,
+            form.querySelector('.field[data-key="category"] .picker-toggle'),
+            form.querySelector('.field[data-key="condition"] .picker-toggle'),
+            form.querySelector('.field[data-key="period"] .picker-toggle'),
+            form.querySelector('.field[data-key="place"] .picker-toggle'),
+            description];
+          targets[firstNg].focus();
+          return;
+        }
+
+        var stored = storeListing({
+          name: name.value.trim(),
+          category: chosen.category,
+          condition: chosen.condition,
+          period: chosen.period,
+          place: chosen.place,
+          description: description.value.trim(),
+          photo: photoDataUrl,
+          createdAt: new Date().toISOString()
+        });
+
+        submit.disabled = true;
+        submit.textContent = "出品済み";
+        note.textContent = stored
+          ? "入力内容を保存しました。サーバーへの出品処理は未実装のため、この端末にだけ残ります。"
+          : "入力内容を確認しました。保存はできませんでした。";
+        note.hidden = false;
+
+        document.getElementById("home-actions").hidden = false;
+      });
+
+      buildPickers();
+    })();
+  </script>
+</body>
+</html>

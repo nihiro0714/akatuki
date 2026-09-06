@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YUマーケット｜ホーム</title>
+  <style>
+    :root {
+      --fill: #d9d9d9;
+      --fill-hover: #cccccc;
+      --text: #1a1a1a;
+      --muted: #767676;
+      --line: #d0d0d0;
+      --nav-height: 56px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--text);
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic",
+        "Noto Sans JP", Meiryo, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .screen {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100%;
+      padding: 28px 20px calc(var(--nav-height) + 32px);
+    }
+
+    /* サイト名 */
+    .sitebar {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .sitebar-name {
+      font-size: 15px;
+      letter-spacing: 0.08em;
+    }
+
+    .sitebar-sub {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    /* 検索 */
+    .search {
+      width: 100%;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: var(--fill);
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+    }
+
+    .search::placeholder {
+      color: #6b6b6b;
+    }
+
+    .search:focus {
+      outline: none;
+      border-color: #8a8a8a;
+    }
+
+    /* カテゴリ */
+    .categories {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      margin: 18px 0 0;
+      padding: 0;
+      border: none;
+    }
+
+    .category {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .category input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .category .box {
+      width: 14px;
+      height: 14px;
+      background: var(--fill);
+      border: 1px solid transparent;
+    }
+
+    .category input:checked + .box {
+      background: #8a8a8a;
+    }
+
+    .category input:focus-visible + .box {
+      border-color: var(--text);
+    }
+
+    /* セクション */
+    .section {
+      margin-top: 26px;
+    }
+
+    .section h2 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px 18px;
+    }
+
+    .card {
+      display: block;
+      padding: 0;
+      border: none;
+      background: none;
+      font-family: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .card .thumb {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: var(--fill);
+    }
+
+    .card:hover .thumb {
+      background: var(--fill-hover);
+    }
+
+    .card .name {
+      margin: 6px 0 0;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .empty {
+      margin: 4px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* 下部タブ */
+    .tabbar {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: var(--nav-height);
+      max-width: 480px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      background: #ffffff;
+      border-top: 1px solid var(--line);
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: none;
+      border-left: 1px solid var(--line);
+      background: none;
+      font-family: inherit;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .tab:first-child {
+      border-left: none;
+    }
+
+    .tab[aria-current="page"] {
+      background: var(--fill);
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(var(--nav-height) + 16px);
+      transform: translateX(-50%);
+      padding: 8px 14px;
+      background: rgba(26, 26, 26, 0.85);
+      color: #ffffff;
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .toast.show {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <main class="screen">
+    <header class="sitebar">
+      <span class="sitebar-name">YUマーケット</span>
+      <span class="sitebar-sub">山口大学</span>
+    </header>
+
+    <input type="search" id="search" class="search" placeholder="検索" autocomplete="off" aria-label="商品を検索">
+
+    <fieldset class="categories" id="categories">
+      <legend class="visually-hidden" hidden>カテゴリ</legend>
+      <label class="category">
+        <input type="checkbox" value="家具"><span class="box" aria-hidden="true"></span>家具
+      </label>
+      <label class="category">
+        <input type="checkbox" value="家電"><span class="box" aria-hidden="true"></span>家電
+      </label>
+      <label class="category">
+        <input type="checkbox" value="教科書"><span class="box" aria-hidden="true"></span>教科書
+      </label>
+      <label class="category">
+        <input type="checkbox" value="その他"><span class="box" aria-hidden="true"></span>その他
+      </label>
+    </fieldset>
+
+    <section class="section">
+      <h2>あなたへのおすすめ</h2>
+      <div class="grid" id="recommended"></div>
+      <p class="empty" id="recommended-empty" hidden>条件に合う商品がありません</p>
+    </section>
+
+    <section class="section">
+      <h2>新着商品</h2>
+      <div class="grid" id="latest"></div>
+      <p class="empty" id="latest-empty" hidden>条件に合う商品がありません</p>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="メインメニュー">
+    <button type="button" class="tab" data-tab="home" aria-current="page">ホーム</button>
+    <button type="button" class="tab" data-tab="search">検索</button>
+    <button type="button" class="tab" data-tab="sell">出品</button>
+    <button type="button" class="tab" data-tab="deals">取引</button>
+    <button type="button" class="tab" data-tab="mypage">マイページ</button>
+  </nav>
+
+  <div class="toast" id="toast" role="status"></div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // 商品APIはまだ繋いでいないため、ここをサーバーからの取得に差し替える。
+      var PRODUCTS = [
+        { id: 1, name: "木製ローテーブル", category: "家具", recommended: true, createdAt: "2026-09-04" },
+        { id: 2, name: "一人暮らし用 冷蔵庫", category: "家電", recommended: true, createdAt: "2026-09-03" },
+        { id: 3, name: "微分積分学 教科書", category: "教科書", recommended: false, createdAt: "2026-09-06" },
+        { id: 4, name: "電子レンジ", category: "家電", recommended: false, createdAt: "2026-09-06" },
+        { id: 5, name: "カラーボックス 3段", category: "家具", recommended: false, createdAt: "2026-09-05" },
+        { id: 6, name: "自転車用 空気入れ", category: "その他", recommended: false, createdAt: "2026-09-05" },
+        { id: 7, name: "統計学入門 教科書", category: "教科書", recommended: true, createdAt: "2026-09-01" },
+        { id: 8, name: "デスクライト", category: "その他", recommended: false, createdAt: "2026-09-02" }
+      ];
+
+      var search = document.getElementById("search");
+      var categories = document.getElementById("categories");
+      var toast = document.getElementById("toast");
+      var toastTimer = null;
+
+      var sections = [
+        {
+          grid: document.getElementById("recommended"),
+          empty: document.getElementById("recommended-empty"),
+          select: function (items) {
+            return items.filter(function (item) { return item.recommended; }).slice(0, 4);
+          }
+        },
+        {
+          grid: document.getElementById("latest"),
+          empty: document.getElementById("latest-empty"),
+          select: function (items) {
+            return items.slice().sort(function (a, b) {
+              return a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : b.id - a.id;
+            }).slice(0, 6);
+          }
+        }
+      ];
+
+      function selectedCategories() {
+        return Array.prototype.filter
+          .call(categories.querySelectorAll("input"), function (input) { return input.checked; })
+          .map(function (input) { return input.value; });
+      }
+
+      function visibleProducts() {
+        var keyword = search.value.trim().toLowerCase();
+        var picked = selectedCategories();
+
+        return PRODUCTS.filter(function (item) {
+          var matchesKeyword = !keyword ||
+            item.name.toLowerCase().indexOf(keyword) !== -1 ||
+            item.category.toLowerCase().indexOf(keyword) !== -1;
+          var matchesCategory = picked.length === 0 || picked.indexOf(item.category) !== -1;
+          return matchesKeyword && matchesCategory;
+        });
+      }
+
+      function createCard(item) {
+        var card = document.createElement("button");
+        card.type = "button";
+        card.className = "card";
+        card.dataset.id = String(item.id);
+
+        var thumb = document.createElement("span");
+        thumb.className = "thumb";
+
+        var name = document.createElement("span");
+        name.className = "name";
+        name.textContent = item.name;
+
+        card.appendChild(thumb);
+        card.appendChild(name);
+
+        card.addEventListener("click", function () {
+          window.location.href = "detail.html?id=" + encodeURIComponent(item.id);
+        });
+
+        return card;
+      }
+
+      function render() {
+        var items = visibleProducts();
+
+        sections.forEach(function (section) {
+          var picked = section.select(items);
+          section.grid.textContent = "";
+          picked.forEach(function (item) {
+            section.grid.appendChild(createCard(item));
+          });
+          section.empty.hidden = picked.length > 0;
+          section.grid.hidden = picked.length === 0;
+        });
+      }
+
+      function showToast(text) {
+        toast.textContent = text;
+        toast.classList.add("show");
+        window.clearTimeout(toastTimer);
+        toastTimer = window.setTimeout(function () {
+          toast.classList.remove("show");
+        }, 1800);
+      }
+
+      search.addEventListener("input", render);
+      categories.addEventListener("change", render);
+
+      Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (tab) {
+        tab.addEventListener("click", function () {
+          if (tab.dataset.tab === "search") {
+            var keyword = search.value.trim();
+            window.location.href = "search.html" +
+              (keyword ? "?q=" + encodeURIComponent(keyword) : "");
+            return;
+          }
+          if (tab.dataset.tab === "sell") {
+            window.location.href = "sell.html";
+            return;
+          }
+          if (tab.dataset.tab === "mypage") {
+            window.location.href = "mypage.html";
+            return;
+          }
+          if (tab.dataset.tab !== "home") {
+            showToast(tab.textContent + "画面は未実装です");
+            return;
+          }
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        });
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

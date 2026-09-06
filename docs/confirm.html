@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YUマーケット｜申込確認</title>
+  <style>
+    :root {
+      --fill: #d9d9d9;
+      --fill-hover: #cccccc;
+      --text: #1a1a1a;
+      --muted: #767676;
+      --error: #c0392b;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: #ffffff;
+      color: var(--text);
+      font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic",
+        "Noto Sans JP", Meiryo, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .screen {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100%;
+      padding: 20px 20px 48px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 400;
+      letter-spacing: 0.04em;
+    }
+
+    .back {
+      padding: 6px 2px;
+      border: none;
+      background: none;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .back:hover {
+      text-decoration: underline;
+    }
+
+    .photo {
+      width: 72%;
+      margin: 0 auto;
+      aspect-ratio: 1 / 1;
+      background: var(--fill);
+    }
+
+    .form {
+      margin-top: 30px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .field-box {
+      padding: 12px 14px;
+      background: var(--fill);
+    }
+
+    .field-box.invalid {
+      outline: 1px solid var(--error);
+    }
+
+    .field-box label {
+      display: block;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+    }
+
+    .field-box input,
+    .field-box select,
+    .field-box textarea {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 6px 8px;
+      border: 1px solid transparent;
+      border-radius: 0;
+      background: #ffffff;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .field-box textarea {
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    .field-box input:focus,
+    .field-box select:focus,
+    .field-box textarea:focus {
+      outline: none;
+      border-color: #8a8a8a;
+    }
+
+    .error {
+      margin: 4px 0 0;
+      min-height: 16px;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--error);
+    }
+
+    .agree {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .agree input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .agree .box {
+      width: 14px;
+      height: 14px;
+      border: 1px solid var(--text);
+      background: #ffffff;
+    }
+
+    .agree input:checked + .box {
+      background: var(--text);
+    }
+
+    .agree input:focus-visible + .box {
+      outline: 1px solid var(--text);
+      outline-offset: 2px;
+    }
+
+    .agree-error {
+      margin: 6px 0 0;
+      min-height: 16px;
+      font-size: 12px;
+      line-height: 16px;
+      color: var(--error);
+      text-align: center;
+    }
+
+    .actions {
+      margin-top: 10px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .submit {
+      width: 180px;
+      height: 52px;
+      border: none;
+      border-radius: 0;
+      background: var(--fill);
+      color: var(--text);
+      font-size: 14px;
+      font-family: inherit;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+    }
+
+    .submit:hover {
+      background: var(--fill-hover);
+    }
+
+    .submit:disabled {
+      color: var(--muted);
+      cursor: default;
+    }
+
+    .note {
+      margin: 14px 0 0;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .note[hidden] {
+      display: none;
+    }
+
+    .actions[hidden] {
+      display: none;
+    }
+
+    .submit.secondary {
+      background: #f0f0f0;
+    }
+
+    .submit.secondary:hover {
+      background: #e6e6e6;
+    }
+
+    .missing {
+      margin: 0;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+
+    .missing a {
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+  <main class="screen" id="screen">
+    <div class="header">
+      <button type="button" class="back" id="back">←</button>
+      <h1>申込確認</h1>
+    </div>
+
+    <div class="photo" id="photo" role="img" aria-label="商品画像"></div>
+
+    <form class="form" id="form" novalidate>
+      <div class="field">
+        <div class="field-box" id="box-date">
+          <label for="pickup-date">受取可能日</label>
+          <input type="date" id="pickup-date" name="pickup-date">
+        </div>
+        <p class="error" id="date-error" role="alert"></p>
+      </div>
+
+      <div class="field">
+        <div class="field-box" id="box-place">
+          <label for="pickup-place">受取希望場所</label>
+          <select id="pickup-place" name="pickup-place">
+            <option value="">選択してください</option>
+            <option value="大学構内">大学構内</option>
+            <option value="最寄り駅">最寄り駅</option>
+            <option value="配送">配送</option>
+            <option value="出品者と相談">出品者と相談</option>
+          </select>
+        </div>
+        <p class="error" id="place-error" role="alert"></p>
+      </div>
+
+      <div class="field">
+        <div class="field-box" id="box-message">
+          <label for="message">メッセージ</label>
+          <textarea id="message" name="message" rows="5" maxlength="500"></textarea>
+        </div>
+        <p class="error" id="message-error" role="alert"></p>
+      </div>
+
+      <label class="agree">
+        <input type="checkbox" id="agree"><span class="box" aria-hidden="true"></span>利用規約に同意する
+      </label>
+      <p class="agree-error" id="agree-error" role="alert"></p>
+
+      <div class="actions">
+        <button type="submit" class="submit" id="submit">申し込み確定</button>
+      </div>
+      <p class="note" id="note" hidden></p>
+
+      <div class="actions" id="home-actions" hidden>
+        <button type="button" class="submit secondary" id="home">ホームに戻る</button>
+      </div>
+    </form>
+  </main>
+
+  <script>
+    (function () {
+      "use strict";
+
+      // 商品APIはまだ繋いでいないため、ここをサーバーからの取得に差し替える。
+      var PRODUCTS = [
+        { id: 1, name: "木製ローテーブル" },
+        { id: 2, name: "一人暮らし用 冷蔵庫" },
+        { id: 3, name: "微分積分学 教科書" },
+        { id: 4, name: "電子レンジ" },
+        { id: 5, name: "カラーボックス 3段" },
+        { id: 6, name: "自転車用 空気入れ" },
+        { id: 7, name: "統計学入門 教科書" },
+        { id: 8, name: "デスクライト" },
+        { id: 9, name: "折りたたみ椅子" },
+        { id: 10, name: "ケトル" },
+        { id: 11, name: "英語リーディング 教科書" },
+        { id: 12, name: "衣類スタンド" }
+      ];
+
+      var screenEl = document.getElementById("screen");
+      var back = document.getElementById("back");
+      var form = document.getElementById("form");
+      var date = document.getElementById("pickup-date");
+      var place = document.getElementById("pickup-place");
+      var message = document.getElementById("message");
+      var agree = document.getElementById("agree");
+      var submit = document.getElementById("submit");
+      var note = document.getElementById("note");
+
+      var id = Number(new URLSearchParams(window.location.search).get("id"));
+      var product = PRODUCTS.filter(function (item) { return item.id === id; })[0];
+
+      back.addEventListener("click", function () {
+        if (window.history.length > 1) {
+          window.history.back();
+          return;
+        }
+        window.location.href = "home.html";
+      });
+
+      document.getElementById("home").addEventListener("click", function () {
+        window.location.href = "home.html";
+      });
+
+      if (!product) {
+        screenEl.textContent = "";
+        var missing = document.createElement("p");
+        missing.className = "missing";
+        missing.appendChild(document.createTextNode("商品が見つかりませんでした。"));
+        missing.appendChild(document.createElement("br"));
+        var link = document.createElement("a");
+        link.href = "search.html";
+        link.textContent = "検索画面に戻る";
+        missing.appendChild(link);
+        screenEl.appendChild(missing);
+        return;
+      }
+
+      document.title = "YUマーケット｜" + product.name + " の申込確認";
+      document.getElementById("photo").setAttribute("aria-label", product.name + " の商品画像");
+
+      // 過去日を選べないようにする。
+      var today = new Date();
+      var minDate = today.getFullYear() + "-" +
+        String(today.getMonth() + 1).padStart(2, "0") + "-" +
+        String(today.getDate()).padStart(2, "0");
+      date.min = minDate;
+
+      function setError(box, output, text) {
+        output.textContent = text;
+        if (box) box.classList.toggle("invalid", Boolean(text));
+        return !text;
+      }
+
+      function validateDate() {
+        var box = document.getElementById("box-date");
+        var output = document.getElementById("date-error");
+        if (!date.value) {
+          return setError(box, output, "受取可能日を選択してください");
+        }
+        if (date.value < minDate) {
+          return setError(box, output, "本日以降の日付を選択してください");
+        }
+        return setError(box, output, "");
+      }
+
+      function validatePlace() {
+        var box = document.getElementById("box-place");
+        var output = document.getElementById("place-error");
+        if (!place.value) {
+          return setError(box, output, "受取希望場所を選択してください");
+        }
+        return setError(box, output, "");
+      }
+
+      function validateMessage() {
+        var box = document.getElementById("box-message");
+        var output = document.getElementById("message-error");
+        if (message.value.length > 500) {
+          return setError(box, output, "メッセージは500文字以内で入力してください");
+        }
+        return setError(box, output, "");
+      }
+
+      function validateAgree() {
+        return setError(null, document.getElementById("agree-error"),
+          agree.checked ? "" : "利用規約への同意が必要です");
+      }
+
+      date.addEventListener("change", validateDate);
+      place.addEventListener("change", validatePlace);
+      message.addEventListener("input", validateMessage);
+      agree.addEventListener("change", validateAgree);
+
+      // 申込APIはまだ繋いでいないため、申込内容はこの端末のブラウザにだけ残る。
+      function storeApplication(application) {
+        try {
+          var saved = JSON.parse(window.localStorage.getItem("applications") || "[]");
+          saved.push(application);
+          window.localStorage.setItem("applications", JSON.stringify(saved));
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      form.addEventListener("submit", function (event) {
+        event.preventDefault();
+        note.hidden = true;
+
+        var checks = [validateDate(), validatePlace(), validateMessage(), validateAgree()];
+        var fields = [date, place, message, agree];
+        var firstNg = checks.indexOf(false);
+        if (firstNg !== -1) {
+          fields[firstNg].focus();
+          return;
+        }
+
+        var stored = storeApplication({
+          id: product.id,
+          name: product.name,
+          pickupDate: date.value,
+          pickupPlace: place.value,
+          message: message.value.trim(),
+          status: "申込中",
+          appliedAt: new Date().toISOString()
+        });
+
+        submit.disabled = true;
+        submit.textContent = "申し込み済み";
+        date.disabled = true;
+        place.disabled = true;
+        message.disabled = true;
+        agree.disabled = true;
+
+        note.textContent = "";
+        note.appendChild(document.createTextNode(stored
+          ? "申し込みを受け付けました。出品者への送信処理は未実装のため、この端末にだけ残ります。"
+          : "入力内容を確認しました。保存はできませんでした。"));
+        note.appendChild(document.createElement("br"));
+        var link = document.createElement("a");
+        link.href = "applications.html";
+        link.textContent = "申込中の商品を見る";
+        note.appendChild(link);
+        note.hidden = false;
+
+        document.getElementById("home-actions").hidden = false;
+      });
+    })();
+  </script>
+</body>
+</html>
