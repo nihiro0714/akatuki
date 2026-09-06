@@ -1,7 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($files = @\\(\"public\\\\home.html\",\"public\\\\search.html\",\"public\\\\detail.html\"\\); foreach \\($f in $files\\) { $p = Join-Path \\(Get-Location\\) $f; $t = [System.IO.File]::ReadAllText\\($p\\); $t = [regex]::Replace\\($t, 'price: \\\\d+, ', ''\\); [System.IO.File]::WriteAllText\\($p, $t, \\(New-Object System.Text.UTF8Encoding\\($false\\)\\)\\) }; Select-String -Path $files -Pattern 'price' | Select-Object -ExpandProperty Line)"
-    ]
-  }
-}
