@@ -3,36 +3,389 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>YUマーケット｜ログイン</title>
+  <title>YUマーケット</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <main class="screen">
+<div class="app">
+
+  <!-- ログイン -->
+  <main class="view" id="view-login" hidden>
     <header class="brand">
       <p class="brand-name">YUマーケット</p>
-      <p class="brand-sub">山口大学</p>
+      <p class="brand-sub">山口大学 学内ゆずりあいサイト</p>
     </header>
 
-    <form class="login-form" id="login-form" novalidate>
+    <form id="login-form" novalidate>
       <div class="field">
-        <label for="email">メールアドレス</label>
-        <input type="email" id="email" name="email" autocomplete="email" inputmode="email">
-        <p class="error" id="email-error" role="alert"></p>
+        <label for="login-email">メールアドレス</label>
+        <input type="email" id="login-email" autocomplete="email" inputmode="email">
+        <p class="error" id="login-email-error" role="alert"></p>
       </div>
 
       <div class="field">
-        <label for="password">パスワード</label>
-        <input type="password" id="password" name="password" autocomplete="current-password">
-        <p class="error" id="password-error" role="alert"></p>
+        <label for="login-password">パスワード</label>
+        <input type="password" id="login-password" autocomplete="current-password">
+        <p class="error" id="login-password-error" role="alert"></p>
       </div>
 
       <div class="actions">
-        <button type="submit" class="submit">ログイン</button>
-        <a class="signup-link" href="signup.html">初めて利用する方はこちら</a>
+        <button type="submit" class="block-button">ログイン</button>
+        <button type="button" class="linkish" data-go="#/signup">初めて利用する方はこちら</button>
       </div>
     </form>
   </main>
 
-  <script src="script.js"></script>
+  <!-- 新規登録 -->
+  <main class="view" id="view-signup" hidden>
+    <header class="brand">
+      <p class="brand-name">新規登録</p>
+      <p class="brand-sub">山口大学のメールアドレスで登録してください</p>
+    </header>
+
+    <form id="signup-form" novalidate>
+      <div class="field">
+        <label for="signup-email">メールアドレス</label>
+        <input type="email" id="signup-email" autocomplete="email" inputmode="email">
+        <p class="error" id="signup-email-error" role="alert"></p>
+      </div>
+
+      <div class="field">
+        <label for="signup-password">パスワード</label>
+        <input type="password" id="signup-password" autocomplete="new-password">
+        <p class="error" id="signup-password-error" role="alert"></p>
+      </div>
+
+      <div class="field">
+        <label for="signup-confirm">パスワード（確認）</label>
+        <input type="password" id="signup-confirm" autocomplete="new-password">
+        <p class="error" id="signup-confirm-error" role="alert"></p>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="block-button">登録する</button>
+        <button type="button" class="linkish" data-go="#/login">すでに登録済みの方はこちら</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- ホーム -->
+  <main class="view" id="view-home" hidden>
+    <form id="home-search-form">
+      <input type="search" class="search-input" id="home-search" placeholder="検索" autocomplete="off" aria-label="商品を検索">
+    </form>
+
+    <fieldset class="categories" id="home-categories">
+      <legend class="visually-hidden" hidden>カテゴリー</legend>
+    </fieldset>
+
+    <h2 class="section-title">あなたへのおすすめ</h2>
+    <div class="grid" id="home-recommended"></div>
+    <p class="empty" id="home-recommended-empty" hidden>条件に合う商品がありません</p>
+
+    <h2 class="section-title">新着商品</h2>
+    <div class="grid" id="home-latest"></div>
+    <p class="empty" id="home-latest-empty" hidden>条件に合う商品がありません</p>
+  </main>
+
+  <!-- 検索（絞り込み＋一覧） -->
+  <main class="view" id="view-search" hidden>
+    <form id="search-form">
+      <input type="search" class="search-input" id="search-input" placeholder="検索" autocomplete="off" aria-label="商品を検索">
+    </form>
+
+    <div class="filters" id="search-filters"></div>
+
+    <div class="grid" id="search-results" style="margin-top:18px;"></div>
+    <p class="empty" id="search-empty" hidden>条件に合う商品がありません</p>
+  </main>
+
+  <!-- 検索結果（キーワード検索のリスト表示） -->
+  <main class="view" id="view-results" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2 id="results-title">検索結果</h2>
+    </div>
+
+    <div class="chips" id="results-chips" hidden></div>
+    <div class="result-list" id="results-list"></div>
+    <p class="empty" id="results-empty" hidden>条件に合う商品がありません</p>
+  </main>
+
+  <!-- 商品詳細 -->
+  <main class="view" id="view-detail" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2 id="detail-name">商品詳細</h2>
+    </div>
+
+    <div class="photo" id="detail-photo" role="img" aria-label="商品画像"></div>
+
+    <div class="description">
+      <h3>商品説明</h3>
+      <p id="detail-description"></p>
+    </div>
+
+    <div class="specs">
+      <div class="spec"><span>カテゴリー</span><span class="value" id="detail-category"></span></div>
+      <div class="spec"><span>色</span><span class="value" id="detail-color"></span></div>
+      <div class="spec"><span>商品の状態</span><span class="value" id="detail-condition"></span></div>
+      <div class="spec"><span>受け渡し可能期間</span><span class="value" id="detail-period"></span></div>
+      <div class="spec"><span>受け渡し場所</span><span class="value" id="detail-pickup"></span></div>
+      <div class="spec"><span>キャンパス</span><span class="value" id="detail-campus"></span></div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="block-button" id="detail-apply">申し込む</button>
+    </div>
+    <p class="note" id="detail-note" hidden></p>
+  </main>
+
+  <!-- 申込確認 -->
+  <main class="view" id="view-confirm" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>申込確認</h2>
+    </div>
+
+    <div class="photo narrow" id="confirm-photo" role="img" aria-label="商品画像"></div>
+
+    <form class="form-stack" id="confirm-form" novalidate>
+      <div>
+        <div class="boxed-field" id="confirm-date-box">
+          <label class="caption" for="confirm-date">受取可能日</label>
+          <input type="date" id="confirm-date">
+        </div>
+        <p class="error" id="confirm-date-error" role="alert"></p>
+      </div>
+
+      <div>
+        <div class="boxed-field" id="confirm-place-box">
+          <label class="caption" for="confirm-place">受取希望場所</label>
+          <select id="confirm-place"></select>
+        </div>
+        <p class="error" id="confirm-place-error" role="alert"></p>
+      </div>
+
+      <div>
+        <div class="boxed-field" id="confirm-message-box">
+          <label class="caption" for="confirm-message">メッセージ</label>
+          <textarea id="confirm-message" rows="5" maxlength="500"></textarea>
+        </div>
+        <p class="error" id="confirm-message-error" role="alert"></p>
+      </div>
+
+      <div>
+        <label class="agree">
+          <input type="checkbox" id="confirm-agree">利用規約に同意する
+        </label>
+        <p class="error center-error" id="confirm-agree-error" role="alert"></p>
+      </div>
+
+      <div class="actions" style="margin-top:0;">
+        <button type="submit" class="block-button">申し込み確定</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- 出品情報の入力 -->
+  <main class="view" id="view-sell" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>出品情報の入力</h2>
+    </div>
+
+    <button type="button" class="photo-picker" id="sell-photo">
+      <span id="sell-photo-label">写真を追加</span>
+    </button>
+    <input type="file" id="sell-photo-input" accept="image/*" hidden>
+    <button type="button" class="photo-remove" id="sell-photo-remove" hidden>写真を削除</button>
+    <p class="error center-error" id="sell-photo-error" role="alert"></p>
+
+    <form class="form-stack" id="sell-form" novalidate>
+      <div class="sell-field">
+        <label for="sell-name">商品名</label>
+        <input type="text" id="sell-name" class="plain-input" maxlength="40" autocomplete="off">
+        <p class="error" id="sell-name-error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="category">
+        <button type="button" class="picker"><span>カテゴリー</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="color">
+        <button type="button" class="picker"><span>色</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="condition">
+        <button type="button" class="picker"><span>商品の状態</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="period">
+        <button type="button" class="picker"><span>受け渡し可能期間</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="pickup">
+        <button type="button" class="picker"><span>受け渡し場所</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="campus">
+        <button type="button" class="picker"><span>キャンパス</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field">
+        <label for="sell-description">商品の説明</label>
+        <textarea id="sell-description" class="plain-input" maxlength="500"></textarea>
+        <p class="error" id="sell-description-error" role="alert"></p>
+      </div>
+
+      <div class="actions" style="margin-top:0;">
+        <button type="submit" class="block-button">出品する</button>
+      </div>
+    </form>
+    <p class="note" id="sell-note" hidden></p>
+  </main>
+
+  <!-- 申込中の商品 -->
+  <main class="view" id="view-applications" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>申込中の商品</h2>
+    </div>
+
+    <div class="app-list" id="applications-list"></div>
+    <p class="empty" id="applications-empty" hidden>
+      申込中の商品はありません。<br>
+      <button type="button" class="linkish" data-go="#/search" style="text-decoration:underline;">検索画面から商品を探す</button>
+    </p>
+  </main>
+
+  <!-- 出品中の商品 -->
+  <main class="view" id="view-listings" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>出品中の商品</h2>
+    </div>
+
+    <div class="app-list" id="listings-list"></div>
+    <p class="empty" id="listings-empty" hidden>
+      出品中の商品はありません。<br>
+      <button type="button" class="linkish" data-go="#/sell" style="text-decoration:underline;">出品する</button>
+    </p>
+  </main>
+
+  <!-- 取引中 -->
+  <main class="view" id="view-deals" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>取引中</h2>
+    </div>
+
+    <div class="app-list" id="deals-list"></div>
+    <p class="empty" id="deals-empty" hidden>取引中の商品はありません。</p>
+  </main>
+
+  <!-- 取引履歴 -->
+  <main class="view" id="view-history" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>取引履歴</h2>
+    </div>
+
+    <div class="app-list" id="history-list"></div>
+    <p class="empty" id="history-empty" hidden>取引履歴はありません。</p>
+  </main>
+
+  <!-- 設定 -->
+  <main class="view" id="view-settings" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>設定</h2>
+    </div>
+
+    <div class="menu">
+      <button type="button" class="menu-item" id="settings-reset">保存データを初期化する</button>
+      <button type="button" class="menu-item" id="settings-logout">ログアウト</button>
+    </div>
+    <p class="empty">
+      このサイトはサーバーを持たないデモです。<br>
+      登録内容・出品・申込はこの端末のブラウザにのみ保存されます。
+    </p>
+  </main>
+
+  <!-- プロフィール（マイページ） -->
+  <main class="view" id="view-mypage" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>プロフィール</h2>
+    </div>
+
+    <div class="profile">
+      <button type="button" class="avatar" id="mypage-avatar" aria-label="プロフィール画像を変更"></button>
+      <input type="file" id="mypage-avatar-input" accept="image/*" hidden>
+
+      <div id="mypage-view">
+        <p class="profile-name" id="mypage-name"></p>
+        <button type="button" class="edit-chip" id="mypage-edit">プロフィールを編集</button>
+        <p id="mypage-faculty"></p>
+        <p class="muted" id="mypage-campus"></p>
+      </div>
+
+      <form class="profile-edit" id="mypage-form" hidden>
+        <div class="field">
+          <label for="mypage-input-name">名前</label>
+          <input type="text" id="mypage-input-name" maxlength="30" autocomplete="name">
+          <p class="error" id="mypage-name-error" role="alert"></p>
+        </div>
+        <div class="field">
+          <label for="mypage-input-faculty">学部</label>
+          <input type="text" id="mypage-input-faculty" maxlength="30" autocomplete="off">
+          <p class="error" id="mypage-faculty-error" role="alert"></p>
+        </div>
+        <div class="field">
+          <label for="mypage-input-campus">キャンパス</label>
+          <select id="mypage-input-campus"></select>
+          <p class="error" id="mypage-campus-error" role="alert"></p>
+        </div>
+        <div class="actions" style="margin-top:0;flex-direction:row;justify-content:center;">
+          <button type="submit" class="block-button" style="width:130px;height:40px;">保存する</button>
+          <button type="button" class="block-button" id="mypage-cancel" style="width:130px;height:40px;">やめる</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="menu" id="mypage-menu">
+      <button type="button" class="menu-item" data-go="#/listings">出品中の商品<span class="badge" id="badge-listings"></span></button>
+      <button type="button" class="menu-item" data-go="#/applications">申込中の商品<span class="badge" id="badge-applications"></span></button>
+      <button type="button" class="menu-item" data-go="#/deals">取引中<span class="badge" id="badge-deals"></span></button>
+      <button type="button" class="menu-item" data-go="#/history">取引履歴<span class="badge" id="badge-history"></span></button>
+      <button type="button" class="menu-item" data-go="#/settings">設定</button>
+    </div>
+  </main>
+
+  <nav class="tabbar" id="tabbar" aria-label="メインメニュー" hidden>
+    <button type="button" class="tab" data-go="#/home">ホーム</button>
+    <button type="button" class="tab" data-go="#/search">検索</button>
+    <button type="button" class="tab" data-go="#/sell">出品</button>
+    <button type="button" class="tab" data-go="#/deals">取引</button>
+    <button type="button" class="tab" data-go="#/mypage">マイページ</button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+
+<script src="app.js"></script>
 </body>
 </html>
