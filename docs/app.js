@@ -41,6 +41,15 @@
     { id: 12, name: "衣類スタンド", category: "家具", color: "ナチュラル", condition: "未使用に近い", pickup: "学生寮", period: "相談可", campus: "吉田", recommended: true, createdAt: "2026-09-01", description: "組み立て説明書あり\n使用期間　半年" }
   ];
 
+  // 「欲しいです」＝ゆずってほしい物の募集。
+  var SAMPLE_WANTS = [
+    { id: "w1", name: "炊飯器（3合炊き）", category: "家電", color: "ホワイト", pickup: "大学構内", period: "今月中", campus: "吉田", author: "理学部 2年", createdAt: "2026-09-05", description: "一人暮らしを始めたので探しています。動けば古くても大丈夫です。" },
+    { id: "w2", name: "本棚", category: "家具", color: "ナチュラル", pickup: "最寄り駅", period: "相談可", campus: "常盤", author: "工学部 3年", createdAt: "2026-09-04", description: "高さ120cmくらいまでのものを探しています。多少の傷は気にしません。" },
+    { id: "w3", name: "有機化学の教科書", category: "教科書", color: "その他", pickup: "大学構内", period: "今週中", campus: "小串", author: "医学部 1年", createdAt: "2026-09-06", description: "後期の授業で使います。書き込みありでも助かります。" },
+    { id: "w4", name: "こたつ", category: "家具", color: "ブラウン", pickup: "学生寮", period: "今月中", campus: "吉田", author: "人文学部 2年", createdAt: "2026-09-02", description: "冬までに用意したいです。天板だけでも構いません。" },
+    { id: "w5", name: "自転車の空気入れ", category: "その他", color: "ブラック", pickup: "大学構内", period: "相談可", campus: "常盤", author: "農学部 4年", createdAt: "2026-09-01", description: "たまに借りられれば十分なので、使っていないものがあればぜひ。" }
+  ];
+
   var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
   var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -136,11 +145,36 @@
     listings: function () { return read("yum.listings", []); },
     saveListings: function (value) { return write("yum.listings", value); },
     applications: function () { return read("yum.applications", []); },
-    saveApplications: function (value) { return write("yum.applications", value); }
+    saveApplications: function (value) { return write("yum.applications", value); },
+    wants: function () { return read("yum.wants", []); },
+    saveWants: function (value) { return write("yum.wants", value); },
+    favorites: function () { return read("yum.favorites", []); },
+    saveFavorites: function (value) { return write("yum.favorites", value); }
   };
 
   function allProducts() {
     return store.listings().concat(SAMPLE);
+  }
+
+  function allWants() {
+    return store.wants().concat(SAMPLE_WANTS);
+  }
+
+  function wantById(id) {
+    var found = allWants().filter(function (item) { return String(item.id) === String(id); });
+    return found[0] || null;
+  }
+
+  function isFavorite(id) {
+    return store.favorites().some(function (value) { return String(value) === String(id); });
+  }
+
+  function toggleFavorite(id) {
+    var list = store.favorites();
+    var next = list.filter(function (value) { return String(value) !== String(id); });
+    if (next.length === list.length) next.push(id);
+    store.saveFavorites(next);
+    return next.length > list.length;
   }
 
   function productById(id) {
@@ -188,7 +222,8 @@
     return card;
   }
 
-  function makeResultCard(item) {
+  // 商品にも「欲しいです」にも使う、丸い画像＋4行のカード。
+  function makeResultCard(item, prefix) {
     var card = document.createElement("button");
     card.type = "button";
     card.className = "result-card";
@@ -208,7 +243,7 @@
     });
     card.appendChild(lines);
 
-    card.addEventListener("click", function () { go("#/item/" + item.id); });
+    card.addEventListener("click", function () { go((prefix || "#/item/") + item.id); });
     return card;
   }
 
@@ -216,6 +251,205 @@
     grid.innerHTML = "";
     items.forEach(function (item) { grid.appendChild(makeCard(item)); });
     empty.hidden = items.length > 0;
+  }
+
+  /* ------------------------------------------------------------------
+     「▽」で開いて複数選べる絞り込み（出品の検索・欲しいですの検索）
+  ------------------------------------------------------------------ */
+  function filterGroup(container, onChange) {
+    var selected = {};
+    var panels = {};
+    var counters = {};
+
+    FILTERS.forEach(function (filter) {
+      selected[filter.key] = [];
+
+      var wrap = document.createElement("div");
+      wrap.className = "filter";
+
+      var toggle = document.createElement("button");
+      toggle.type = "button";
+      toggle.className = "filter-toggle";
+      toggle.innerHTML = "<span></span><span class=\"caret\">▽</span><span class=\"count\"></span>";
+      toggle.firstChild.textContent = filter.label;
+      wrap.appendChild(toggle);
+
+      var panel = document.createElement("div");
+      panel.className = "filter-panel";
+      panel.hidden = true;
+
+      OPTIONS[filter.key].forEach(function (value) {
+        var label = document.createElement("label");
+        var box = document.createElement("input");
+        box.type = "checkbox";
+        box.value = value;
+        box.addEventListener("change", function () {
+          var list = selected[filter.key];
+          var index = list.indexOf(value);
+          if (box.checked && index < 0) list.push(value);
+          if (!box.checked && index >= 0) list.splice(index, 1);
+          changed();
+        });
+        label.appendChild(box);
+        label.appendChild(document.createTextNode(value));
+        panel.appendChild(label);
+      });
+
+      toggle.addEventListener("click", function () { panel.hidden = !panel.hidden; });
+
+      wrap.appendChild(panel);
+      container.appendChild(wrap);
+      panels[filter.key] = panel;
+      counters[filter.key] = toggle.querySelector(".count");
+    });
+
+    function changed() {
+      FILTERS.forEach(function (filter) {
+        var count = selected[filter.key].length;
+        counters[filter.key].textContent = count ? "（" + count + "）" : "";
+      });
+      if (onChange) onChange();
+    }
+
+    function matches(item, keyword) {
+      if (keyword) {
+        var haystack = [item.name, item.category, item.color, item.description].join(" ");
+        if (haystack.indexOf(keyword) < 0) return false;
+      }
+      return FILTERS.every(function (filter) {
+        var list = selected[filter.key];
+        return list.length === 0 || list.indexOf(item[filter.key]) >= 0;
+      });
+    }
+
+    // 「その他」のように複数の項目で同じ選択肢名が使われるため、
+    // チェックを外す対象はその項目のパネル内だけに限定する。
+    function clear(key, value) {
+      var list = selected[key];
+      var index = list.indexOf(value);
+      if (index >= 0) list.splice(index, 1);
+      each(panels[key].querySelectorAll('input[type="checkbox"]'), function (box) {
+        if (box.value === value) box.checked = false;
+      });
+      changed();
+    }
+
+    function active() {
+      var list = [];
+      FILTERS.forEach(function (filter) {
+        selected[filter.key].forEach(function (value) {
+          list.push({ key: filter.key, label: filter.label, value: value });
+        });
+      });
+      return list;
+    }
+
+    return { matches: matches, clear: clear, active: active };
+  }
+
+  function makeChip(text, onRemove) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.innerHTML = "<span></span><span class=\"x\">×</span>";
+    chip.firstChild.textContent = text;
+    chip.addEventListener("click", onRemove);
+    return chip;
+  }
+
+  function fillChips(container, keyword, filters, onKeyword, onRender) {
+    container.innerHTML = "";
+    var any = false;
+
+    if (keyword) {
+      any = true;
+      container.appendChild(makeChip(keyword, function () {
+        onKeyword("");
+        onRender();
+      }));
+    }
+
+    filters.active().forEach(function (entry) {
+      any = true;
+      container.appendChild(makeChip(entry.label + "：" + entry.value, function () {
+        filters.clear(entry.key, entry.value);
+        onRender();
+      }));
+    });
+
+    container.hidden = !any;
+  }
+
+  /* ------------------------------------------------------------------
+     「＋」で開いて1つだけ選ぶ入力（出品フォーム・欲しいです投稿フォーム）
+  ------------------------------------------------------------------ */
+  function pickerGroup(form) {
+    var values = {};
+    var fields = {};
+
+    each(form.querySelectorAll(".sell-field[data-key]"), function (field) {
+      var key = field.getAttribute("data-key");
+      var button = field.querySelector(".picker");
+      var panel = field.querySelector(".picker-panel");
+      values[key] = "";
+      fields[key] = field;
+
+      OPTIONS[key].forEach(function (value) {
+        var label = document.createElement("label");
+        var radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = form.id + "-" + key;
+        radio.value = value;
+        radio.addEventListener("change", function () {
+          values[key] = value;
+          button.querySelector(".chosen").textContent = value;
+          panel.hidden = true;
+          setError(null, field.querySelector(".error"), "");
+        });
+        label.appendChild(radio);
+        label.appendChild(document.createTextNode(value));
+        panel.appendChild(label);
+      });
+
+      button.addEventListener("click", function () { panel.hidden = !panel.hidden; });
+    });
+
+    function validate() {
+      var ok = true;
+      Object.keys(fields).forEach(function (key) {
+        var field = fields[key];
+        if (values[key]) return;
+        var label = field.querySelector(".picker span").textContent;
+        setError(null, field.querySelector(".error"), label + "を選んでください");
+        ok = false;
+      });
+      return ok;
+    }
+
+    function set(key, value) {
+      var field = fields[key];
+      if (!field || OPTIONS[key].indexOf(value) < 0) return;
+      each(field.querySelectorAll(".picker-panel input"), function (radio) {
+        radio.checked = radio.value === value;
+      });
+      values[key] = value;
+      field.querySelector(".chosen").textContent = value;
+    }
+
+    function reset() {
+      Object.keys(fields).forEach(function (key) {
+        var field = fields[key];
+        values[key] = "";
+        each(field.querySelectorAll(".picker-panel input"), function (radio) {
+          radio.checked = false;
+        });
+        field.querySelector(".chosen").textContent = "＋";
+        field.querySelector(".picker-panel").hidden = true;
+        setError(null, field.querySelector(".error"), "");
+      });
+    }
+
+    return { values: values, validate: validate, set: set, reset: reset };
   }
 
   /* ------------------------------------------------------------------
@@ -341,51 +575,7 @@
   ------------------------------------------------------------------ */
   var search = (function () {
     var input = $("search-input");
-    var filters = $("search-filters");
-    var selected = {};
-    var panels = {};
-
-    FILTERS.forEach(function (filter) {
-      selected[filter.key] = [];
-
-      var wrap = document.createElement("div");
-      wrap.className = "filter";
-
-      var toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "filter-toggle";
-      toggle.innerHTML = "<span>" + filter.label + "</span><span class=\"caret\">▽</span><span class=\"count\"></span>";
-      wrap.appendChild(toggle);
-
-      var panel = document.createElement("div");
-      panel.className = "filter-panel";
-      panel.hidden = true;
-
-      OPTIONS[filter.key].forEach(function (value) {
-        var label = document.createElement("label");
-        var box = document.createElement("input");
-        box.type = "checkbox";
-        box.value = value;
-        box.addEventListener("change", function () {
-          var list = selected[filter.key];
-          var index = list.indexOf(value);
-          if (box.checked && index < 0) list.push(value);
-          if (!box.checked && index >= 0) list.splice(index, 1);
-          render();
-        });
-        label.appendChild(box);
-        label.appendChild(document.createTextNode(value));
-        panel.appendChild(label);
-      });
-
-      toggle.addEventListener("click", function () {
-        panel.hidden = !panel.hidden;
-      });
-
-      wrap.appendChild(panel);
-      filters.appendChild(wrap);
-      panels[filter.key] = panel;
-    });
+    var filters = filterGroup($("search-filters"), function () { render(); });
 
     $("search-form").addEventListener("submit", function (event) {
       event.preventDefault();
@@ -393,46 +583,16 @@
       go("#/results");
     });
 
-    function matches(item, keyword) {
-      if (keyword) {
-        var haystack = [item.name, item.category, item.color, item.description].join(" ");
-        if (haystack.indexOf(keyword) < 0) return false;
-      }
-      return FILTERS.every(function (filter) {
-        var list = selected[filter.key];
-        return list.length === 0 || list.indexOf(item[filter.key]) >= 0;
-      });
-    }
-
     function render() {
-      each(filters.querySelectorAll(".filter"), function (wrap, index) {
-        var count = selected[FILTERS[index].key].length;
-        wrap.querySelector(".count").textContent = count ? "（" + count + "）" : "";
-      });
-
-      var items = allProducts().filter(function (item) {
-        return matches(item, input.value.trim());
-      });
-      fillGrid($("search-results"), $("search-empty"), items);
-    }
-
-    // 「その他」のように複数の項目で同じ選択肢名が使われるため、
-    // チェックを外す対象はその項目のパネル内だけに限定する。
-    function clear(key, value) {
-      var list = selected[key];
-      var index = list.indexOf(value);
-      if (index >= 0) list.splice(index, 1);
-      each(panels[key].querySelectorAll('input[type="checkbox"]'), function (box) {
-        if (box.value === value) box.checked = false;
-      });
-      render();
+      fillGrid($("search-results"), $("search-empty"),
+        allProducts().filter(function (item) {
+          return filters.matches(item, input.value.trim());
+        }));
     }
 
     return {
       render: render,
-      selected: function () { return selected; },
-      clear: clear,
-      matches: matches,
+      filters: filters,
       keyword: function () { return input.value.trim(); },
       setKeyword: function (value) { input.value = value; }
     };
@@ -454,52 +614,181 @@
         ? "“" + keyword + "”検索結果"
         : "検索結果";
 
-      var chips = $("results-chips");
-      chips.innerHTML = "";
-      var selected = search.selected();
-      var any = false;
-
-      if (keyword) {
-        any = true;
-        chips.appendChild(makeChip(keyword, function () {
-          setKeyword("");
-          render();
-        }));
-      }
-
-      FILTERS.forEach(function (filter) {
-        selected[filter.key].forEach(function (value) {
-          any = true;
-          chips.appendChild(makeChip(filter.label + "：" + value, function () {
-            search.clear(filter.key, value);
-            render();
-          }));
-        });
-      });
-
-      chips.hidden = !any;
+      fillChips($("results-chips"), keyword, search.filters, setKeyword, render);
 
       var list = $("results-list");
       list.innerHTML = "";
       var items = allProducts().filter(function (item) {
-        return search.matches(item, keyword);
+        return search.filters.matches(item, keyword);
       });
       items.forEach(function (item) { list.appendChild(makeResultCard(item)); });
       $("results-empty").hidden = items.length > 0;
     }
 
-    function makeChip(text, onRemove) {
-      var chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = "chip";
-      chip.innerHTML = "<span></span><span class=\"x\">×</span>";
-      chip.firstChild.textContent = text;
-      chip.addEventListener("click", onRemove);
-      return chip;
+    return { render: render, setKeyword: setKeyword };
+  })();
+
+  /* ------------------------------------------------------------------
+     「欲しいです」（ゆずってほしい物の募集）
+  ------------------------------------------------------------------ */
+  var wants = (function () {
+    var input = $("wants-input");
+    var filters = filterGroup($("wants-filters"), function () { /* 結果画面で反映する */ });
+    var keyword = "";
+
+    $("wants-form").addEventListener("submit", function (event) {
+      event.preventDefault();
+      open();
+    });
+
+    $("wants-search").addEventListener("click", open);
+
+    function open() {
+      keyword = input.value.trim();
+      go("#/wants-results");
+    }
+
+    function setKeyword(value) {
+      keyword = value;
+      input.value = value;
+    }
+
+    function render() {
+      $("wants-results-title").textContent = keyword
+        ? "“" + keyword + "”検索結果"
+        : "“欲しいです”検索結果";
+
+      fillChips($("wants-chips"), keyword, filters, setKeyword, render);
+
+      var list = $("wants-list");
+      list.innerHTML = "";
+      var items = allWants().filter(function (item) {
+        return filters.matches(item, keyword);
+      });
+      items.forEach(function (item) { list.appendChild(makeResultCard(item, "#/want/")); });
+      $("wants-empty").hidden = items.length > 0;
     }
 
     return { render: render, setKeyword: setKeyword };
   })();
+
+  var wantDetail = (function () {
+    var current = null;
+
+    $("want-offer").addEventListener("click", function () {
+      if (!current) return;
+      sell.prefill(current);
+      toast("募集内容を出品フォームに反映しました");
+      go("#/sell");
+    });
+
+    $("want-delete").addEventListener("click", function () {
+      if (!current) return;
+      store.saveWants(store.wants().filter(function (item) { return item.id !== current.id; }));
+      toast("投稿を取り消しました");
+      go("#/my-wants");
+    });
+
+    function render(id) {
+      var want = wantById(id);
+      current = want;
+      if (!want) {
+        go("#/wants");
+        return;
+      }
+
+      $("want-name").textContent = want.name;
+      $("want-description").textContent = want.description || "（補足はありません）";
+      $("want-category").textContent = want.category;
+      $("want-color").textContent = want.color;
+      $("want-pickup").textContent = want.pickup;
+      $("want-period").textContent = want.period;
+      $("want-campus").textContent = want.campus;
+      $("want-author").textContent = want.author;
+      $("want-date").textContent = formatDate(want.createdAt);
+
+      var mine = store.wants().some(function (item) { return item.id === want.id; });
+      $("want-delete").hidden = !mine;
+      $("want-offer").disabled = mine;
+      $("want-note").hidden = !mine;
+      if (mine) $("want-note").textContent = "自分が投稿した「欲しいです」です";
+    }
+
+    return { render: render };
+  })();
+
+  (function wantForm() {
+    var form = $("want-form");
+    var name = $("want-input-name");
+    var description = $("want-input-description");
+    var pickers = pickerGroup(form);
+
+    form.addEventListener("submit", function (event) {
+      event.preventDefault();
+
+      var ok = name.value.trim()
+        ? setError(name, $("want-name-error"), "")
+        : setError(name, $("want-name-error"), "欲しい物を入力してください");
+
+      if (!pickers.validate()) ok = false;
+      if (!ok) return;
+
+      var profile = store.profile();
+      var list = store.wants();
+      list.push({
+        id: "w" + Date.now(),
+        name: name.value.trim(),
+        category: pickers.values.category,
+        color: pickers.values.color,
+        pickup: pickers.values.pickup,
+        period: pickers.values.period,
+        campus: pickers.values.campus,
+        description: description.value.trim(),
+        author: profile.name,
+        createdAt: today()
+      });
+      store.saveWants(list);
+
+      form.reset();
+      pickers.reset();
+      each(form.querySelectorAll(".error"), function (box) { box.textContent = ""; });
+      toast("「欲しいです」を投稿しました");
+      go("#/my-wants");
+    });
+  })();
+
+  function renderMyWants() {
+    var entries = store.wants().slice().reverse();
+    renderEntryList("my-wants-list", "my-wants-empty", entries, function (entry) {
+      return makeEntryCard(entry, [
+        entry.name,
+        "投稿日　" + formatDate(entry.createdAt),
+        entry.category + "・" + entry.color + "・" + entry.period
+      ], [
+        {
+          label: "投稿を見る",
+          run: function () { go("#/want/" + entry.id); }
+        },
+        {
+          label: "投稿を取り消す",
+          run: function () {
+            store.saveWants(store.wants().filter(function (item) { return item.id !== entry.id; }));
+            toast("投稿を取り消しました");
+            renderMyWants();
+            renderBadges();
+          }
+        }
+      ]);
+    });
+  }
+
+  function renderFavorites() {
+    var items = store.favorites().map(productById).filter(Boolean).reverse();
+    var list = $("favorites-list");
+    list.innerHTML = "";
+    items.forEach(function (item) { list.appendChild(makeResultCard(item)); });
+    $("favorites-empty").hidden = items.length > 0;
+  }
 
   /* ------------------------------------------------------------------
      商品詳細
@@ -510,6 +799,21 @@
     $("detail-apply").addEventListener("click", function () {
       if (current) go("#/apply/" + current.id);
     });
+
+    $("detail-favorite").addEventListener("click", function () {
+      if (!current) return;
+      var added = toggleFavorite(current.id);
+      renderFavoriteButton();
+      toast(added ? "欲しいものリストに追加しました" : "欲しいものリストから外しました");
+    });
+
+    function renderFavoriteButton() {
+      var button = $("detail-favorite");
+      var on = current && isFavorite(current.id);
+      button.setAttribute("aria-pressed", on ? "true" : "false");
+      button.querySelector(".heart").textContent = on ? "♥" : "♡";
+      $("detail-favorite-label").textContent = on ? "欲しいものリストに追加済み" : "欲しいものリストに追加";
+    }
 
     function render(id) {
       var item = productById(id);
@@ -540,6 +844,8 @@
       note.hidden = !(applied || mine);
       if (mine) note.textContent = "自分が出品した商品です";
       else if (applied) note.textContent = "この商品はすでに申し込み済みです";
+
+      renderFavoriteButton();
     }
 
     return { render: render };
@@ -640,7 +946,7 @@
   /* ------------------------------------------------------------------
      出品
   ------------------------------------------------------------------ */
-  (function sell() {
+  var sell = (function () {
     var form = $("sell-form");
     var name = $("sell-name");
     var description = $("sell-description");
@@ -648,34 +954,9 @@
     var photoInput = $("sell-photo-input");
     var photoRemove = $("sell-photo-remove");
     var photoLabel = $("sell-photo-label");
-    var chosen = {};
+    var pickers = pickerGroup(form);
+    var chosen = pickers.values;
     var photo = "";
-
-    each(form.querySelectorAll(".sell-field[data-key]"), function (field) {
-      var key = field.getAttribute("data-key");
-      var button = field.querySelector(".picker");
-      var panel = field.querySelector(".picker-panel");
-      chosen[key] = "";
-
-      OPTIONS[key].forEach(function (value) {
-        var label = document.createElement("label");
-        var radio = document.createElement("input");
-        radio.type = "radio";
-        radio.name = "sell-" + key;
-        radio.value = value;
-        radio.addEventListener("change", function () {
-          chosen[key] = value;
-          button.querySelector(".chosen").textContent = value;
-          panel.hidden = true;
-          setError(null, field.querySelector(".error"), "");
-        });
-        label.appendChild(radio);
-        label.appendChild(document.createTextNode(value));
-        panel.appendChild(label);
-      });
-
-      button.addEventListener("click", function () { panel.hidden = !panel.hidden; });
-    });
 
     photoButton.addEventListener("click", function () { photoInput.click(); });
 
@@ -708,14 +989,7 @@
         ? setError(name, $("sell-name-error"), "")
         : setError(name, $("sell-name-error"), "商品名を入力してください");
 
-      each(form.querySelectorAll(".sell-field[data-key]"), function (field) {
-        var key = field.getAttribute("data-key");
-        var label = field.querySelector(".picker span").textContent;
-        if (!chosen[key]) {
-          setError(null, field.querySelector(".error"), label + "を選んでください");
-          ok = false;
-        }
-      });
+      if (!pickers.validate()) ok = false;
 
       if (!description.value.trim()) {
         setError(description, $("sell-description-error"), "商品の説明を入力してください");
@@ -764,17 +1038,21 @@
       setPhoto(photoButton, "");
       photoLabel.hidden = false;
       photoRemove.hidden = true;
-      each(form.querySelectorAll(".sell-field[data-key]"), function (field) {
-        var key = field.getAttribute("data-key");
-        chosen[key] = "";
-        field.querySelector(".chosen").textContent = "＋";
-        field.querySelector(".picker-panel").hidden = true;
-        setError(null, field.querySelector(".error"), "");
-      });
+      pickers.reset();
       each(form.querySelectorAll(".error"), function (box) { box.textContent = ""; });
       $("sell-photo-error").textContent = "";
     }
 
+    // 「欲しいです」の募集内容を出品フォームに引き継ぐ。
+    function prefill(want) {
+      reset();
+      name.value = want.name;
+      ["category", "color", "pickup", "period", "campus"].forEach(function (key) {
+        pickers.set(key, want[key]);
+      });
+    }
+
+    return { prefill: prefill };
   })();
 
   /* ------------------------------------------------------------------
@@ -918,6 +1196,8 @@
 
   function renderBadges() {
     $("badge-listings").textContent = countLabel(store.listings().length);
+    $("badge-favorites").textContent = countLabel(store.favorites().length);
+    $("badge-wants").textContent = countLabel(store.wants().length);
     $("badge-applications").textContent = countLabel(applicationsBy("申込中").length);
     $("badge-deals").textContent = countLabel(applicationsBy("取引中").length);
     $("badge-history").textContent = countLabel(applicationsBy("取引完了").length);
@@ -1029,7 +1309,7 @@
 
   $("settings-reset").addEventListener("click", function () {
     if (!window.confirm("出品・申込・プロフィールをすべて削除します。よろしいですか？")) return;
-    ["yum.listings", "yum.applications", "yum.profile", "yum.accounts", "yum.session"].forEach(function (key) {
+    ["yum.listings", "yum.applications", "yum.wants", "yum.favorites", "yum.profile", "yum.accounts", "yum.session"].forEach(function (key) {
       try { window.localStorage.removeItem(key); } catch (error) { /* 消せなくても続行する */ }
     });
     toast("初期化しました");
@@ -1045,6 +1325,11 @@
     "#/home": { view: "view-home", tabs: true, tab: "#/home", render: function () { home.render(); } },
     "#/search": { view: "view-search", tabs: true, tab: "#/search", render: function () { search.render(); } },
     "#/results": { view: "view-results", tabs: true, tab: "#/search", render: function () { results.render(); } },
+    "#/wants": { view: "view-wants", tabs: true, tab: "#/search" },
+    "#/wants-results": { view: "view-wants-results", tabs: true, tab: "#/search", render: function () { wants.render(); } },
+    "#/want-new": { view: "view-want-new", tabs: true, tab: "#/search" },
+    "#/my-wants": { view: "view-my-wants", tabs: true, tab: "#/mypage", render: renderMyWants },
+    "#/favorites": { view: "view-favorites", tabs: true, tab: "#/mypage", render: renderFavorites },
     "#/sell": { view: "view-sell", tabs: true, tab: "#/sell" },
     "#/applications": { view: "view-applications", tabs: true, tab: "#/mypage", render: renderApplications },
     "#/listings": { view: "view-listings", tabs: true, tab: "#/mypage", render: renderListings },
@@ -1056,15 +1341,19 @@
 
   function route() {
     var hash = window.location.hash || "#/login";
-    var match = /^#\/(item|apply)\/(.+)$/.exec(hash);
+    var match = /^#\/(item|apply|want)\/(.+)$/.exec(hash);
     var config;
     var param = null;
 
     if (match) {
       param = match[2];
-      config = match[1] === "item"
-        ? { view: "view-detail", tabs: true, tab: "#/search", render: function () { detail.render(param); } }
-        : { view: "view-confirm", tabs: true, tab: "#/search", render: function () { confirmView.render(param); } };
+      if (match[1] === "item") {
+        config = { view: "view-detail", tabs: true, tab: "#/search", render: function () { detail.render(param); } };
+      } else if (match[1] === "apply") {
+        config = { view: "view-confirm", tabs: true, tab: "#/search", render: function () { confirmView.render(param); } };
+      } else {
+        config = { view: "view-want-detail", tabs: true, tab: "#/search", render: function () { wantDetail.render(param); } };
+      }
     } else {
       config = ROUTES[hash];
     }

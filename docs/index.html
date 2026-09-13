@@ -90,6 +90,11 @@
 
   <!-- 検索（絞り込み＋一覧） -->
   <main class="view" id="view-search" hidden>
+    <div class="switcher">
+      <button type="button" class="seg" data-go="#/search" aria-current="page">出品を探す</button>
+      <button type="button" class="seg" data-go="#/wants">「欲しいです」を探す</button>
+    </div>
+
     <form id="search-form">
       <input type="search" class="search-input" id="search-input" placeholder="検索" autocomplete="off" aria-label="商品を検索">
     </form>
@@ -110,6 +115,157 @@
     <div class="chips" id="results-chips" hidden></div>
     <div class="result-list" id="results-list"></div>
     <p class="empty" id="results-empty" hidden>条件に合う商品がありません</p>
+  </main>
+
+  <!-- 「欲しいです」検索 -->
+  <main class="view" id="view-wants" hidden>
+    <div class="screen-head">
+      <h2>“欲しいです”検索</h2>
+    </div>
+
+    <div class="switcher">
+      <button type="button" class="seg" data-go="#/search">出品を探す</button>
+      <button type="button" class="seg" data-go="#/wants" aria-current="page">「欲しいです」を探す</button>
+    </div>
+
+    <form id="wants-form">
+      <input type="search" class="search-input" id="wants-input" placeholder="検索" autocomplete="off" aria-label="欲しいですを検索">
+    </form>
+
+    <div class="filters" id="wants-filters"></div>
+
+    <div class="actions">
+      <button type="button" class="block-button" id="wants-search">この条件で検索</button>
+      <button type="button" class="linkish" data-go="#/want-new">「欲しいです」を投稿する</button>
+    </div>
+  </main>
+
+  <!-- 「欲しいです」検索結果 -->
+  <main class="view" id="view-wants-results" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2 id="wants-results-title">“欲しいです”検索結果</h2>
+    </div>
+
+    <div class="chips" id="wants-chips" hidden></div>
+    <div class="result-list" id="wants-list"></div>
+    <p class="empty" id="wants-empty" hidden>
+      条件に合う「欲しいです」はありません。<br>
+      <button type="button" class="linkish" data-go="#/want-new" style="text-decoration:underline;">「欲しいです」を投稿する</button>
+    </p>
+  </main>
+
+  <!-- 「欲しいです」の詳細 -->
+  <main class="view" id="view-want-detail" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2 id="want-name">欲しいです</h2>
+    </div>
+
+    <div class="description">
+      <h3>募集内容</h3>
+      <p id="want-description"></p>
+    </div>
+
+    <div class="specs">
+      <div class="spec"><span>カテゴリー</span><span class="value" id="want-category"></span></div>
+      <div class="spec"><span>色</span><span class="value" id="want-color"></span></div>
+      <div class="spec"><span>受取場所</span><span class="value" id="want-pickup"></span></div>
+      <div class="spec"><span>受け渡し可能期間</span><span class="value" id="want-period"></span></div>
+      <div class="spec"><span>キャンパス</span><span class="value" id="want-campus"></span></div>
+      <div class="spec"><span>投稿者</span><span class="value" id="want-author"></span></div>
+      <div class="spec"><span>投稿日</span><span class="value" id="want-date"></span></div>
+    </div>
+
+    <div class="actions">
+      <button type="button" class="block-button" id="want-offer">ゆずります</button>
+      <button type="button" class="linkish" id="want-delete" hidden>この投稿を取り消す</button>
+    </div>
+    <p class="note" id="want-note" hidden></p>
+  </main>
+
+  <!-- 「欲しいです」の投稿 -->
+  <main class="view" id="view-want-new" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>「欲しいです」の投稿</h2>
+    </div>
+
+    <form class="form-stack" id="want-form" novalidate>
+      <div class="sell-field">
+        <label for="want-input-name">欲しい物</label>
+        <input type="text" id="want-input-name" class="plain-input" maxlength="40" autocomplete="off">
+        <p class="error" id="want-name-error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="category">
+        <button type="button" class="picker"><span>カテゴリー</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="color">
+        <button type="button" class="picker"><span>色</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="pickup">
+        <button type="button" class="picker"><span>受取場所</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="period">
+        <button type="button" class="picker"><span>受け渡し可能期間</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field" data-key="campus">
+        <button type="button" class="picker"><span>キャンパス</span><span class="chosen">＋</span></button>
+        <div class="picker-panel" hidden></div>
+        <p class="error" role="alert"></p>
+      </div>
+
+      <div class="sell-field">
+        <label for="want-input-description">補足（状態のこだわりなど）</label>
+        <textarea id="want-input-description" class="plain-input" maxlength="500"></textarea>
+        <p class="error" id="want-description-error" role="alert"></p>
+      </div>
+
+      <div class="actions" style="margin-top:0;">
+        <button type="submit" class="block-button">投稿する</button>
+      </div>
+    </form>
+  </main>
+
+  <!-- 投稿した「欲しいです」 -->
+  <main class="view" id="view-my-wants" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>投稿した「欲しいです」</h2>
+    </div>
+
+    <div class="app-list" id="my-wants-list"></div>
+    <p class="empty" id="my-wants-empty" hidden>
+      投稿した「欲しいです」はありません。<br>
+      <button type="button" class="linkish" data-go="#/want-new" style="text-decoration:underline;">「欲しいです」を投稿する</button>
+    </p>
+  </main>
+
+  <!-- 欲しいものリスト -->
+  <main class="view" id="view-favorites" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>欲しいものリスト</h2>
+    </div>
+
+    <div class="result-list" id="favorites-list"></div>
+    <p class="empty" id="favorites-empty" hidden>
+      欲しいものリストは空です。<br>
+      商品ページの「欲しい」を押すと、ここに保存されます。
+    </p>
   </main>
 
   <!-- 商品詳細 -->
@@ -137,6 +293,9 @@
 
     <div class="actions">
       <button type="button" class="block-button" id="detail-apply">申し込む</button>
+      <button type="button" class="fav-button" id="detail-favorite" aria-pressed="false">
+        <span class="heart" aria-hidden="true">♡</span><span id="detail-favorite-label">欲しいものリストに追加</span>
+      </button>
     </div>
     <p class="note" id="detail-note" hidden></p>
   </main>
@@ -368,6 +527,8 @@
 
     <div class="menu" id="mypage-menu">
       <button type="button" class="menu-item" data-go="#/listings">出品中の商品<span class="badge" id="badge-listings"></span></button>
+      <button type="button" class="menu-item" data-go="#/favorites">欲しいものリスト<span class="badge" id="badge-favorites"></span></button>
+      <button type="button" class="menu-item" data-go="#/my-wants">投稿した「欲しいです」<span class="badge" id="badge-wants"></span></button>
       <button type="button" class="menu-item" data-go="#/applications">申込中の商品<span class="badge" id="badge-applications"></span></button>
       <button type="button" class="menu-item" data-go="#/deals">取引中<span class="badge" id="badge-deals"></span></button>
       <button type="button" class="menu-item" data-go="#/history">取引履歴<span class="badge" id="badge-history"></span></button>

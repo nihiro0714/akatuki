@@ -160,6 +160,27 @@ button, input, select, textarea {
 .block-button:disabled { opacity: 0.6; cursor: default; }
 .block-button.wide { width: 100%; }
 
+.fav-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: var(--radius);
+  padding: 9px 16px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.fav-button:hover { background: var(--panel); }
+
+.fav-button[aria-pressed="true"] {
+  background: var(--panel);
+  border-color: var(--text);
+}
+
+.fav-button .heart { font-size: 15px; }
+
 .linkish {
   border: 0;
   background: none;
@@ -196,6 +217,31 @@ button, input, select, textarea {
   gap: 6px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.switcher {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.seg {
+  border: 1px solid var(--line);
+  background: #ffffff;
+  border-radius: var(--radius);
+  padding: 9px 6px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.seg:hover { background: var(--panel); }
+
+.seg[aria-current="page"] {
+  background: var(--fill);
+  color: var(--text);
+  border-color: var(--fill);
 }
 
 .filters { display: flex; flex-direction: column; gap: 2px; }
