@@ -53,6 +53,9 @@
   var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
   var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+  // 「欲しいです」と欲しいものリストは今回は公開しない。コードは残し、ルートと入口だけ閉じる。
+  var ENABLE_WANTS = false;
+
   /* ------------------------------------------------------------------
      共通ヘルパー
   ------------------------------------------------------------------ */
@@ -1339,9 +1342,20 @@
     "#/mypage": { view: "view-mypage", tabs: true, tab: "#/mypage", render: function () { mypage.render(); } }
   };
 
+  if (!ENABLE_WANTS) {
+    ["#/wants", "#/wants-results", "#/want-new", "#/my-wants", "#/favorites"].forEach(function (hash) {
+      delete ROUTES[hash];
+    });
+    each(document.querySelectorAll(
+      "#view-search .switcher, #detail-favorite, #mypage-menu [data-go='#/favorites'], #mypage-menu [data-go='#/my-wants']"
+    ), function (element) {
+      element.hidden = true;
+    });
+  }
+
   function route() {
     var hash = window.location.hash || "#/login";
-    var match = /^#\/(item|apply|want)\/(.+)$/.exec(hash);
+    var match = (ENABLE_WANTS ? /^#\/(item|apply|want)\/(.+)$/ : /^#\/(item|apply)\/(.+)$/).exec(hash);
     var config;
     var param = null;
 
