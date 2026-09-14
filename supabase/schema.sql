@@ -50,8 +50,10 @@ create policy "own listings" on listings for all to authenticated
 create policy "read my applications" on applications for select to authenticated
   using ((select auth.uid()) = applicant_id
       or (select auth.uid()) = (select owner_id from listings where id = listing_id));
+-- status は '申込中' でしか作れない（承認前に counterpart_email で連絡先を取られないように）
 create policy "apply" on applications for insert to authenticated
   with check ((select auth.uid()) = applicant_id
+      and status = '申込中' and completed_at is null
       and exists (select 1 from listings l
                   where l.id = listing_id and l.status = 'open'
                     and l.owner_id <> (select auth.uid())));
