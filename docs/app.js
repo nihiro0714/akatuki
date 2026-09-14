@@ -1,7 +1,7 @@
 /* YUマーケット
    山口大学の学内で不要になった物を無償でゆずりあうサイト。
-   サーバーはまだ無いため、アカウント・出品・申込はこの端末の
-   localStorage にだけ保存している。公開時はサーバー側に置き換えること。 */
+   ログインとプロフィールは Supabase に保存する。
+   出品・申込は移行中で、まだこの端末の localStorage に保存している。 */
 (function () {
   "use strict";
 
@@ -56,6 +56,11 @@
   // 「欲しいです」と欲しいものリストは今回は公開しない。コードは残し、ルートと入口だけ閉じる。
   var ENABLE_WANTS = false;
 
+  var UNIVERSITY_EMAIL = /@yamaguchi-u\.ac\.jp$/i;
+
+  // window.supabase はライブラリ本体。接続先は config.js。
+  var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   /* ------------------------------------------------------------------
      共通ヘルパー
   ------------------------------------------------------------------ */
@@ -103,6 +108,12 @@
     }, 2400);
   }
 
+  function showLoginNote(text) {
+    var note = $("login-note");
+    note.textContent = text;
+    note.hidden = !text;
+  }
+
   function formatDate(value) {
     if (!value) return "";
     var parts = String(value).split("-");
@@ -136,15 +147,48 @@
   /* ------------------------------------------------------------------
      保存データ
   ------------------------------------------------------------------ */
+  // Supabase から読んだデータをメモリに持つ。描画は同期のまま cache を読み、
+  // ログイン直後と書き込みの後に refresh() で入れ直す。
+  var cache = { me: null, profiles: {}, listings: [], applications: [] };
+
+  function refresh() {
+    return Promise.all([
+      sb.from("profiles").select("*"),
+      sb.from("listings").select("*").order("created_at", { ascending: false }),
+      sb.from("applications").select("*").order("created_at", { ascending: false })
+    ]).then(function (results) {
+      results.forEach(function (result) {
+        if (result.error) throw result.error;
+      });
+      cache.profiles = {};
+      results[0].data.forEach(function (row) { cache.profiles[row.id] = row; });
+      cache.listings = results[1].data;
+      cache.applications = results[2].data;
+    });
+  }
+
+  // 読み込みに失敗してもログイン状態は保ち、再読み込みで取り直せるようにする。
+  async function enter(session) {
+    cache.me = session.user.id;
+    try {
+      await refresh();
+    } catch (error) {
+      toast("データを読み込めませんでした。再読み込みしてください");
+    }
+  }
+
+  function leave() {
+    cache.me = null;
+    cache.profiles = {};
+    cache.listings = [];
+    cache.applications = [];
+    go("#/login");
+  }
+
   var store = {
-    accounts: function () { return read("yum.accounts", []); },
-    saveAccounts: function (value) { return write("yum.accounts", value); },
-    session: function () { return read("yum.session", null); },
-    saveSession: function (value) { return write("yum.session", value); },
     profile: function () {
-      return read("yum.profile", { name: "山口 太郎", faculty: "工学部", campus: "常盤", photo: "" });
+      return cache.profiles[cache.me] || { id: cache.me, name: "", faculty: "", campus: "", photo_url: null };
     },
-    saveProfile: function (value) { return write("yum.profile", value); },
     listings: function () { return read("yum.listings", []); },
     saveListings: function (value) { return write("yum.listings", value); },
     applications: function () { return read("yum.applications", []); },
@@ -463,7 +507,30 @@
     var email = $("login-email");
     var password = $("login-password");
 
-    loginForm.addEventListener("submit", function (event) {
+    function loginErrorMessage(error) {
+      if (error.code === "email_not_confirmed" || /not confirmed/i.test(error.message)) {
+        return "メールアドレスの確認が済んでいません。確認メールのリンクを開いてください";
+      }
+      if (error.code === "invalid_credentials" || /invalid login credentials/i.test(error.message)) {
+        return "メールアドレスまたはパスワードが正しくありません";
+      }
+      return "ログインできませんでした。通信状況を確認して、もう一度お試しください";
+    }
+
+    function signupErrorMessage(error) {
+      // ドメイン制限はDBのトリガーで弾くため、Supabase からは汎用のエラーしか返らない。
+      if (/database error saving new user/i.test(error.message)) {
+        return "登録できませんでした。山口大学のメールアドレスか確認してください";
+      }
+      if (error.code === "user_already_exists") return "このメールアドレスは登録済みです";
+      if (error.code === "weak_password") return "推測されやすいパスワードです。別のパスワードにしてください";
+      if (error.code === "over_email_send_rate_limit" || error.status === 429) {
+        return "確認メールの送信が混み合っています。しばらく待ってからお試しください";
+      }
+      return "登録できませんでした。通信状況を確認して、もう一度お試しください";
+    }
+
+    loginForm.addEventListener("submit", async function (event) {
       event.preventDefault();
       var address = email.value.trim();
       var okEmail = address
@@ -476,20 +543,20 @@
         : setError(password, $("login-password-error"), "パスワードを入力してください");
       if (!okEmail || !okPassword) return;
 
-      var accounts = store.accounts();
-      // 登録がまだ一件も無い場合は、動作確認のためそのまま通す。
-      if (accounts.length > 0) {
-        var matched = accounts.filter(function (account) {
-          return account.email === address && account.password === password.value;
-        })[0];
-        if (!matched) {
-          setError(password, $("login-password-error"), "メールアドレスまたはパスワードが正しくありません");
-          return;
-        }
+      var button = loginForm.querySelector('[type="submit"]');
+      button.disabled = true;
+      var result = await sb.auth.signInWithPassword({ email: address, password: password.value })
+        .catch(function (error) { return { error: error }; });
+      if (result.error) {
+        button.disabled = false;
+        setError(password, $("login-password-error"), loginErrorMessage(result.error));
+        return;
       }
 
-      store.saveSession({ email: address });
       password.value = "";
+      showLoginNote("");
+      await enter(result.data.session);
+      button.disabled = false;
       go("#/home");
     });
 
@@ -498,14 +565,16 @@
     var newPassword = $("signup-password");
     var confirmPassword = $("signup-confirm");
 
-    signupForm.addEventListener("submit", function (event) {
+    signupForm.addEventListener("submit", async function (event) {
       event.preventDefault();
       var address = newEmail.value.trim();
-      var okEmail = address
-        ? (EMAIL_PATTERN.test(address)
-          ? setError(newEmail, $("signup-email-error"), "")
-          : setError(newEmail, $("signup-email-error"), "メールアドレスの形式が正しくありません"))
-        : setError(newEmail, $("signup-email-error"), "メールアドレスを入力してください");
+      var okEmail = !address
+        ? setError(newEmail, $("signup-email-error"), "メールアドレスを入力してください")
+        : !EMAIL_PATTERN.test(address)
+          ? setError(newEmail, $("signup-email-error"), "メールアドレスの形式が正しくありません")
+          : !UNIVERSITY_EMAIL.test(address)
+            ? setError(newEmail, $("signup-email-error"), "山口大学のメールアドレスで登録してください")
+            : setError(newEmail, $("signup-email-error"), "");
       var okPassword = newPassword.value.length >= 8
         ? setError(newPassword, $("signup-password-error"), "")
         : setError(newPassword, $("signup-password-error"), "パスワードは8文字以上で入力してください");
@@ -514,19 +583,45 @@
         : setError(confirmPassword, $("signup-confirm-error"), "パスワードが一致しません");
       if (!okEmail || !okPassword || !okConfirm) return;
 
-      var accounts = store.accounts();
-      if (accounts.some(function (account) { return account.email === address; })) {
+      var button = signupForm.querySelector('[type="submit"]');
+      button.disabled = true;
+      var result = await sb.auth.signUp({
+        email: address,
+        password: newPassword.value,
+        // 開いているサイト（公開版かローカル）へ戻す。Supabase の Redirect URLs に無い場合は Site URL へ戻る。
+        options: { emailRedirectTo: window.location.origin + window.location.pathname }
+      }).catch(function (error) { return { error: error }; });
+      button.disabled = false;
+
+      if (result.error) {
+        if (result.error.code === "weak_password") {
+          setError(newPassword, $("signup-password-error"), signupErrorMessage(result.error));
+        } else {
+          setError(newEmail, $("signup-email-error"), signupErrorMessage(result.error));
+        }
+        return;
+      }
+
+      // 確認メールが有効なとき、登録済みのアドレスはエラーにならず identities が空で返る。
+      var user = result.data.user;
+      if (user && user.identities && user.identities.length === 0) {
         setError(newEmail, $("signup-email-error"), "このメールアドレスは登録済みです");
         return;
       }
 
-      accounts.push({ email: address, password: newPassword.value });
-      store.saveAccounts(accounts);
-      store.saveSession({ email: address });
       newPassword.value = "";
       confirmPassword.value = "";
-      toast("登録しました");
-      go("#/home");
+
+      // Supabase 側で確認メールをオフにしている場合は、そのままログイン状態で返る。
+      if (result.data.session) {
+        await enter(result.data.session);
+        toast("登録しました");
+        go("#/home");
+        return;
+      }
+
+      showLoginNote("確認メールを送りました。メール内のリンクを開いてください");
+      go("#/login");
     });
   })();
 
@@ -1233,26 +1328,16 @@
 
     avatar.addEventListener("click", function () { avatarInput.click(); });
 
+    // プロフィール画像は、出品写真の保存先（Storage）と一緒に用意する。
     avatarInput.addEventListener("change", function () {
-      var file = avatarInput.files && avatarInput.files[0];
-      if (!file) return;
-      readPhoto(file, function (dataUrl) {
-        var profile = store.profile();
-        profile.photo = dataUrl;
-        if (store.saveProfile(profile)) {
-          setPhoto(avatar, dataUrl);
-          toast("プロフィール画像を変更しました");
-        } else {
-          toast("保存できませんでした。画像のサイズを小さくしてください");
-        }
-      }, function (text) { toast(text); });
       avatarInput.value = "";
+      toast("プロフィール画像の変更は準備中です");
     });
 
     $("mypage-edit").addEventListener("click", function () { setEditing(true); });
     $("mypage-cancel").addEventListener("click", function () { setEditing(false); });
 
-    form.addEventListener("submit", function (event) {
+    form.addEventListener("submit", async function (event) {
       event.preventDefault();
       var name = $("mypage-input-name");
       var faculty = $("mypage-input-faculty");
@@ -1268,11 +1353,25 @@
         : setError(campusSelect, $("mypage-campus-error"), "キャンパスを選んでください");
       if (!okName || !okFaculty || !okCampus) return;
 
-      var profile = store.profile();
-      profile.name = name.value.trim();
-      profile.faculty = faculty.value.trim();
-      profile.campus = campusSelect.value;
-      store.saveProfile(profile);
+      var button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      // RLS で弾かれた更新はエラーにならず0件で返るので、select() で更新できた行を確かめる。
+      var result = await sb.from("profiles")
+        .update({ name: name.value.trim(), faculty: faculty.value.trim(), campus: campusSelect.value })
+        .eq("id", cache.me)
+        .select();
+      var saved = result.data && result.data[0];
+      if (result.error || !saved) {
+        button.disabled = false;
+        toast("保存できませんでした。もう一度お試しください");
+        return;
+      }
+      try {
+        await refresh();
+      } catch (error) {
+        cache.profiles[cache.me] = saved;
+      }
+      button.disabled = false;
       setEditing(false);
       render();
       toast("プロフィールを保存しました");
@@ -1291,8 +1390,8 @@
 
     function render() {
       var profile = store.profile();
-      setPhoto(avatar, profile.photo);
-      $("mypage-name").textContent = profile.name;
+      setPhoto(avatar, profile.photo_url);
+      $("mypage-name").textContent = profile.name || "名前未設定";
       $("mypage-faculty").textContent = profile.faculty;
       $("mypage-campus").textContent = profile.campus ? profile.campus + "キャンパス" : "";
       setEditing(false);
@@ -1305,18 +1404,10 @@
   /* ------------------------------------------------------------------
      設定
   ------------------------------------------------------------------ */
-  $("settings-logout").addEventListener("click", function () {
-    store.saveSession(null);
-    go("#/login");
-  });
-
-  $("settings-reset").addEventListener("click", function () {
-    if (!window.confirm("出品・申込・プロフィールをすべて削除します。よろしいですか？")) return;
-    ["yum.listings", "yum.applications", "yum.wants", "yum.favorites", "yum.profile", "yum.accounts", "yum.session"].forEach(function (key) {
-      try { window.localStorage.removeItem(key); } catch (error) { /* 消せなくても続行する */ }
-    });
-    toast("初期化しました");
-    go("#/login");
+  // この端末だけログアウトする（ほかの端末のログインは残す）。
+  $("settings-logout").addEventListener("click", async function () {
+    await sb.auth.signOut({ scope: "local" });
+    if (cache.me) leave();
   });
 
   /* ------------------------------------------------------------------
@@ -1373,16 +1464,16 @@
     }
 
     if (!config) {
-      go(store.session() ? "#/home" : "#/login");
+      go(cache.me ? "#/home" : "#/login");
       return;
     }
 
-    if (config.auth !== false && !store.session()) {
+    if (config.auth !== false && !cache.me) {
       go("#/login");
       return;
     }
 
-    if (store.session() && config.auth === false) {
+    if (cache.me && config.auth === false) {
       go("#/home");
       return;
     }
@@ -1415,6 +1506,49 @@
     go(target.getAttribute("data-go"));
   });
 
-  window.addEventListener("hashchange", route);
-  route();
+  // 確認メールのリンクから戻ると、URL に #access_token=... や ?code=... が付いている。
+  // ルーターが先に動くと未知のハッシュとして #/login へ書き換え、トークンを読めなくなる。
+  // そのため supabase-js のセッション取得を待ち、URL を掃除してからルーターを動かす。
+  function readAuthCallback() {
+    var hash = window.location.hash.slice(1);
+    var fromHash = new URLSearchParams(hash.indexOf("=") >= 0 ? hash : "");
+    var fromQuery = new URLSearchParams(window.location.search);
+    return {
+      present: fromHash.has("access_token") || fromHash.has("error") || fromQuery.has("code") || fromQuery.has("error"),
+      error: fromHash.get("error_code") || fromHash.get("error") || fromQuery.get("error_code") || fromQuery.get("error")
+    };
+  }
+
+  async function start() {
+    var callback = readAuthCallback();
+    var result = await sb.auth.getSession().catch(function () { return { data: { session: null } }; });
+    var session = result.data.session;
+
+    if (callback.present) window.history.replaceState(null, "", window.location.pathname);
+
+    if (session) {
+      await enter(session);
+      if (callback.present) toast("メールアドレスを確認しました");
+    } else if (callback.present) {
+      showLoginNote(callback.error === "otp_expired"
+        ? "確認リンクの有効期限が切れています。もう一度登録してください"
+        : "確認リンクからログインできませんでした。メールアドレスとパスワードでログインしてください");
+    }
+
+    // ほかのタブでのログアウトやセッション切れ。このコールバック内では Supabase を await しない。
+    sb.auth.onAuthStateChange(function (event) {
+      if (event === "SIGNED_OUT" && cache.me) leave();
+    });
+
+    window.addEventListener("hashchange", route);
+    if (callback.present) go(cache.me ? "#/home" : "#/login");
+    else route();
+  }
+
+  // 以前のデモ版が端末に残した平文パスワードとログイン状態を消す。
+  ["yum.accounts", "yum.session"].forEach(function (key) {
+    try { window.localStorage.removeItem(key); } catch (error) { /* 消せなくても続行する */ }
+  });
+
+  start();
 })();
