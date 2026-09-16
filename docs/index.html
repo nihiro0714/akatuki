@@ -66,6 +66,7 @@
       <div class="actions">
         <button type="submit" class="block-button">登録する</button>
         <button type="button" class="linkish" data-go="#/login">すでに登録済みの方はこちら</button>
+        <button type="button" class="linkish" data-go="#/terms">利用規約</button>
       </div>
     </form>
   </main>
@@ -338,7 +339,7 @@
 
       <div>
         <label class="agree">
-          <input type="checkbox" id="confirm-agree">利用規約に同意する
+          <input type="checkbox" id="confirm-agree"><span><a href="#/terms">利用規約</a>に同意する</span>
         </label>
         <p class="error center-error" id="confirm-agree-error" role="alert"></p>
       </div>
@@ -480,6 +481,34 @@
     <p class="empty" id="history-empty" hidden>取引履歴はありません。</p>
   </main>
 
+  <!-- 利用規約（ログイン前でも読める） -->
+  <main class="view" id="view-terms" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>利用規約</h2>
+    </div>
+
+    <div class="description">
+      <h3>1. 運営について</h3>
+      <p>このサイトは山口大学の学生が個人で運営する非公式のものです。大学とは関係ありません。</p>
+    </div>
+
+    <div class="description">
+      <h3>2. 譲渡は無償です</h3>
+      <p>譲渡はすべて無償です。金銭のやり取りは行わないでください。</p>
+    </div>
+
+    <div class="description">
+      <h3>3. トラブルについて</h3>
+      <p>受け渡しやトラブルは当事者間で解決してください。運営者は責任を負いません。</p>
+    </div>
+
+    <div class="description">
+      <h3>メールアドレスの扱い</h3>
+      <p>登録時のメールアドレスは、ログインと、取引が成立した相手への連絡先表示にのみ使用します。</p>
+    </div>
+  </main>
+
   <!-- 設定 -->
   <main class="view" id="view-settings" hidden>
     <div class="screen-head">
@@ -488,6 +517,7 @@
     </div>
 
     <div class="menu">
+      <button type="button" class="menu-item" data-go="#/terms">利用規約</button>
       <button type="button" class="menu-item" id="settings-logout">ログアウト</button>
     </div>
     <p class="empty">

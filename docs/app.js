@@ -26,30 +26,6 @@
     { key: "campus", label: "キャンパス" }
   ];
 
-  var SAMPLE = [
-    { id: 1, name: "木製ローテーブル", category: "家具", color: "ブラウン", condition: "目立った傷なし", pickup: "大学構内", period: "今週中", campus: "吉田", recommended: true, createdAt: "2026-09-04", description: "組み立て済み\n使用期間　1年" },
-    { id: 2, name: "一人暮らし用 冷蔵庫", category: "家電", color: "ホワイト", condition: "やや傷や汚れあり", pickup: "学生寮", period: "相談可", campus: "常盤", recommended: true, createdAt: "2026-09-03", description: "動作確認済み\n使用期間　2年" },
-    { id: 3, name: "微分積分学 教科書", category: "教科書", color: "その他", condition: "書き込みあり", pickup: "大学構内", period: "今週中", campus: "吉田", recommended: false, createdAt: "2026-09-06", description: "第3版\n書き込みあり" },
-    { id: 4, name: "電子レンジ", category: "家電", color: "ブラック", condition: "目立った傷なし", pickup: "最寄り駅", period: "今月中", campus: "吉田", recommended: false, createdAt: "2026-09-06", description: "動作確認済み\n使用期間　2年" },
-    { id: 5, name: "カラーボックス 3段", category: "家具", color: "ナチュラル", condition: "やや傷や汚れあり", pickup: "大学構内", period: "今月中", campus: "常盤", recommended: false, createdAt: "2026-09-05", description: "背板に小さな傷あり\n使用期間　3年" },
-    { id: 6, name: "自転車用 空気入れ", category: "その他", color: "グレー", condition: "目立った傷なし", pickup: "最寄り駅", period: "相談可", campus: "小串", recommended: false, createdAt: "2026-09-05", description: "動作確認済み\n使用期間　1年" },
-    { id: 7, name: "統計学入門 教科書", category: "教科書", color: "ホワイト", condition: "未使用に近い", pickup: "学生寮", period: "今月中", campus: "常盤", recommended: true, createdAt: "2026-09-01", description: "書き込みなし\n使用期間　半年" },
-    { id: 8, name: "デスクライト", category: "その他", color: "ホワイト", condition: "目立った傷なし", pickup: "大学構内", period: "今週中", campus: "吉田", recommended: false, createdAt: "2026-09-02", description: "動作確認済み\n使用期間　2年" },
-    { id: 9, name: "折りたたみ椅子", category: "家具", color: "ブラック", condition: "やや傷や汚れあり", pickup: "最寄り駅", period: "相談可", campus: "吉田", recommended: false, createdAt: "2026-09-04", description: "座面に汚れあり\n使用期間　2年" },
-    { id: 10, name: "電気ケトル", category: "家電", color: "グレー", condition: "目立った傷なし", pickup: "大学構内", period: "今週中", campus: "小串", recommended: false, createdAt: "2026-09-03", description: "動作確認済み\n使用期間　1年" },
-    { id: 11, name: "英語リーディング 教科書", category: "教科書", color: "その他", condition: "書き込みあり", pickup: "最寄り駅", period: "今月中", campus: "常盤", recommended: false, createdAt: "2026-09-02", description: "蛍光ペンでの書き込みあり\n使用期間　1年" },
-    { id: 12, name: "衣類スタンド", category: "家具", color: "ナチュラル", condition: "未使用に近い", pickup: "学生寮", period: "相談可", campus: "吉田", recommended: true, createdAt: "2026-09-01", description: "組み立て説明書あり\n使用期間　半年" }
-  ];
-
-  // 「欲しいです」＝ゆずってほしい物の募集。
-  var SAMPLE_WANTS = [
-    { id: "w1", name: "炊飯器（3合炊き）", category: "家電", color: "ホワイト", pickup: "大学構内", period: "今月中", campus: "吉田", author: "理学部 2年", createdAt: "2026-09-05", description: "一人暮らしを始めたので探しています。動けば古くても大丈夫です。" },
-    { id: "w2", name: "本棚", category: "家具", color: "ナチュラル", pickup: "最寄り駅", period: "相談可", campus: "常盤", author: "工学部 3年", createdAt: "2026-09-04", description: "高さ120cmくらいまでのものを探しています。多少の傷は気にしません。" },
-    { id: "w3", name: "有機化学の教科書", category: "教科書", color: "その他", pickup: "大学構内", period: "今週中", campus: "小串", author: "医学部 1年", createdAt: "2026-09-06", description: "後期の授業で使います。書き込みありでも助かります。" },
-    { id: "w4", name: "こたつ", category: "家具", color: "ブラウン", pickup: "学生寮", period: "今月中", campus: "吉田", author: "人文学部 2年", createdAt: "2026-09-02", description: "冬までに用意したいです。天板だけでも構いません。" },
-    { id: "w5", name: "自転車の空気入れ", category: "その他", color: "ブラック", pickup: "大学構内", period: "相談可", campus: "常盤", author: "農学部 4年", createdAt: "2026-09-01", description: "たまに借りられれば十分なので、使っていないものがあればぜひ。" }
-  ];
-
   var MAX_PHOTO_SIDE = 1024;
 
   // iPhone の写真（HEIC）を読めないブラウザ向けの変換ライブラリ。必要になったときだけ読み込む。
@@ -317,7 +293,7 @@
   }
 
   function allWants() {
-    return store.wants().concat(SAMPLE_WANTS);
+    return store.wants();
   }
 
   function wantById(id) {
@@ -1697,6 +1673,7 @@
     "#/my-wants": { view: "view-my-wants", tabs: true, tab: "#/mypage", render: renderMyWants },
     "#/favorites": { view: "view-favorites", tabs: true, tab: "#/mypage", render: renderFavorites },
     "#/sell": { view: "view-sell", tabs: true, tab: "#/sell" },
+    "#/terms": { view: "view-terms", tabs: true, tab: "#/mypage", auth: "any" },
     "#/applications": { view: "view-applications", tabs: true, tab: "#/mypage", render: renderApplications },
     "#/received": { view: "view-received", tabs: true, tab: "#/mypage", render: renderReceived },
     "#/listings": { view: "view-listings", tabs: true, tab: "#/mypage", render: renderListings },
@@ -1741,7 +1718,8 @@
       return;
     }
 
-    if (config.auth !== false && !cache.me) {
+    // auth: false はログイン前だけの画面、"any" はどちらでも開ける画面（利用規約）。
+    if (config.auth !== false && config.auth !== "any" && !cache.me) {
       go("#/login");
       return;
     }
@@ -1756,7 +1734,7 @@
     });
 
     var tabbar = $("tabbar");
-    tabbar.hidden = !config.tabs;
+    tabbar.hidden = !(config.tabs && cache.me);
     each(tabbar.querySelectorAll(".tab"), function (tab) {
       if (config.tab && tab.getAttribute("data-go") === config.tab) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
