@@ -1,7 +1,7 @@
 /* YUマーケット
    山口大学の学内で不要になった物を無償でゆずりあうサイト。
-   ログイン・プロフィール・出品は Supabase に保存する。
-   申込は移行中で、まだこの端末の localStorage に保存している。 */
+   ログイン・プロフィール・出品・申込は Supabase に保存する。
+   公開していない「欲しいです」と欲しいものリストだけは、この端末の localStorage に残している。 */
 (function () {
   "use strict";
 
@@ -260,7 +260,35 @@
     cache.profiles = {};
     cache.listings = [];
     cache.applications = [];
+    contacts = {};
     go("#/login");
+  }
+
+  // 取引相手のメールアドレス。当事者で取引中・取引完了のときだけ RPC が返す。
+  var contacts = {};
+
+  function contactOf(applicationId) {
+    if (!contacts[applicationId]) {
+      contacts[applicationId] = sb.rpc("counterpart_email", { app_id: applicationId }).then(function (result) {
+        if (result.error || !result.data) {
+          delete contacts[applicationId];
+          if (result.error) throw result.error;
+        }
+        return result.data;
+      });
+    }
+    return contacts[applicationId];
+  }
+
+  // カードの index 行目（0 始まり）に連絡先を後から書き込む。
+  function fillContact(card, index, applicationId) {
+    var line = card.querySelectorAll(".body p")[index];
+    line.textContent = "連絡先　読み込み中…";
+    contactOf(applicationId).then(function (email) {
+      line.textContent = "連絡先　" + (email || "表示できません");
+    }, function () {
+      line.textContent = "連絡先　読み込めませんでした";
+    });
   }
 
   var store = {
@@ -268,8 +296,7 @@
       return cache.profiles[cache.me] || { id: cache.me, name: "", faculty: "", campus: "", photo_url: null };
     },
     listings: function () { return cache.listings; },
-    applications: function () { return read("yum.applications", []); },
-    saveApplications: function (value) { return write("yum.applications", value); },
+    applications: function () { return cache.applications; },
     wants: function () { return read("yum.wants", []); },
     saveWants: function (value) { return write("yum.wants", value); },
     favorites: function () { return read("yum.favorites", []); },
@@ -315,17 +342,38 @@
     return found[0] || null;
   }
 
-  function applicationsBy(status) {
-    return store.applications().filter(function (item) { return item.status === status; });
+  function listingOf(application) {
+    return allProducts().filter(function (item) { return item.id === application.listing_id; })[0] || null;
   }
 
-  function updateApplication(id, changes) {
-    var list = store.applications().map(function (item) {
-      if (String(item.id) !== String(id)) return item;
-      Object.keys(changes).forEach(function (key) { item[key] = changes[key]; });
-      return item;
+  // cache.applications には RLS で「自分の申込」と「自分の出品への申込」だけが入っている。
+  function applicationsBy(status) {
+    return store.applications().filter(function (item) {
+      return item.status === status && item.applicant_id === cache.me;
     });
-    store.saveApplications(list);
+  }
+
+  function receivedApplications() {
+    return store.applications().filter(function (item) {
+      var listing = listingOf(item);
+      return listing && listing.owner_id === cache.me && item.applicant_id !== cache.me;
+    });
+  }
+
+  function historyApplications() {
+    return store.applications().filter(function (item) {
+      var listing = listingOf(item);
+      return item.status === "取引完了" && (item.applicant_id === cache.me || (listing && listing.owner_id === cache.me));
+    });
+  }
+
+  function personLabel(id) {
+    var profile = cache.profiles[id] || {};
+    return [
+      profile.name || "名前未設定",
+      profile.faculty,
+      profile.campus ? profile.campus + "キャンパス" : ""
+    ].filter(Boolean).join("・");
   }
 
   /* ------------------------------------------------------------------
@@ -1014,15 +1062,11 @@
       $("detail-pickup").textContent = item.pickup;
       $("detail-campus").textContent = item.campus;
 
-      var owner = cache.profiles[item.owner_id] || {};
-      $("detail-owner").textContent = [
-        owner.name || "名前未設定",
-        owner.faculty,
-        owner.campus ? owner.campus + "キャンパス" : ""
-      ].filter(Boolean).join("・");
+      $("detail-owner").textContent = personLabel(item.owner_id);
 
       var applied = store.applications().some(function (entry) {
-        return String(entry.productId) === String(item.id) && entry.status !== "取引完了";
+        return entry.listing_id === item.id && entry.applicant_id === cache.me
+          && (entry.status === "申込中" || entry.status === "取引中");
       });
       var mine = item.owner_id === cache.me;
       var closed = item.status !== "open";
@@ -1063,7 +1107,7 @@
       place.appendChild(option);
     });
 
-    form.addEventListener("submit", function (event) {
+    form.addEventListener("submit", async function (event) {
       event.preventDefault();
       if (!current) return;
 
@@ -1090,24 +1134,34 @@
 
       if (!okDate || !okPlace || !okMessage || !okAgree) return;
 
-      var list = store.applications();
-      list.push({
-        id: "a" + Date.now(),
-        productId: current.id,
-        name: current.name,
-        photo_url: current.photo_url || "",
-        appliedAt: today(),
-        date: date.value,
-        place: place.value,
-        message: message.value.trim(),
-        status: "申込中"
-      });
+      var button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      // supabase-js のクエリは then しか持たないので、.catch ではなく try で受ける。
+      var result;
+      try {
+        result = await sb.from("applications").insert({
+          listing_id: current.id,
+          applicant_id: cache.me,
+          date: date.value,
+          place: place.value,
+          message: message.value.trim()
+        });
+      } catch (error) {
+        result = { error: error };
+      }
 
-      if (!store.saveApplications(list)) {
-        toast("保存できませんでした。写真のサイズを小さくしてください");
+      if (result.error) {
+        button.disabled = false;
+        // 23505: 同じ出品への有効な申込が既にある（one_active_application）
+        // 42501: RLS で弾かれた（受付が終わった・自分の出品）
+        if (result.error.code === "23505") toast("すでに申込済みです");
+        else if (result.error.code === "42501") toast("この商品には申し込めません。画面を再読み込みしてください");
+        else toast("申し込めませんでした。通信状況を確認して、もう一度お試しください");
         return;
       }
 
+      try { await refresh(); } catch (error) { /* 次の読み込みで反映される */ }
+      button.disabled = false;
       form.reset();
       toast("申し込みました");
       go("#/applications");
@@ -1118,6 +1172,10 @@
       current = item;
       if (!item) {
         go("#/search");
+        return;
+      }
+      if (item.status !== "open" || item.owner_id === cache.me) {
+        go("#/item/" + item.id);
         return;
       }
       setPhoto($("confirm-photo"), item.photo_url);
@@ -1301,28 +1359,47 @@
     $(emptyId).hidden = entries.length > 0;
   }
 
+  // 状態を変える操作は RPC だけで行う（applications.status はクライアントから更新できない）。
+  async function changeApplication(rpc, application, button, question, doneText, rerender) {
+    if (!window.confirm(question)) return;
+    button.disabled = true;
+    var result;
+    try {
+      result = await sb.rpc(rpc, { app_id: application.id });
+    } catch (error) {
+      result = { error: error };
+    }
+    if (result.error) {
+      button.disabled = false;
+      toast(/not allowed/i.test(result.error.message || "")
+        ? "この操作はできませんでした。画面を再読み込みしてください"
+        : "通信に失敗しました。もう一度お試しください");
+      return;
+    }
+    try { await refresh(); } catch (error) { /* 次の読み込みで反映される */ }
+    toast(doneText);
+    rerender();
+    renderBadges();
+  }
+
+  // 申込者側のカード。写真と商品名は出品から引く。
+  function applicationCard(entry, lines, actions) {
+    var listing = listingOf(entry) || {};
+    return makeEntryCard(Object.assign({}, entry, { photo_url: listing.photo_url }),
+      [listing.name || "（商品が見つかりません）"].concat(lines), actions);
+  }
+
   function renderApplications() {
-    var entries = applicationsBy("申込中").slice().reverse();
-    renderEntryList("applications-list", "applications-empty", entries, function (entry) {
-      return makeEntryCard(entry, [entry.name, "申込日　" + formatDate(entry.appliedAt)], [
-        {
-          label: "受け渡し日時を確定",
-          run: function () {
-            updateApplication(entry.id, { status: "取引中" });
-            toast("取引を開始しました");
-            renderApplications();
-            renderBadges();
-          }
-        },
+    renderEntryList("applications-list", "applications-empty", applicationsBy("申込中"), function (entry) {
+      return applicationCard(entry, [
+        "申込日　" + formatDate(dateOf(entry.created_at)),
+        "希望日　" + formatDate(entry.date)
+      ], [
         {
           label: "申し込みを取り消す",
-          run: function () {
-            store.saveApplications(store.applications().filter(function (item) {
-              return item.id !== entry.id;
-            }));
-            toast("申し込みを取り消しました");
-            renderApplications();
-            renderBadges();
+          run: function (event) {
+            changeApplication("cancel_application", entry, event.currentTarget,
+              "この申し込みを取り消しますか？", "申し込みを取り消しました", renderApplications);
           }
         }
       ]);
@@ -1330,34 +1407,102 @@
   }
 
   function renderDeals() {
-    var entries = applicationsBy("取引中").slice().reverse();
-    renderEntryList("deals-list", "deals-empty", entries, function (entry) {
-      return makeEntryCard(entry, [
-        entry.name,
+    renderEntryList("deals-list", "deals-empty", applicationsBy("取引中"), function (entry) {
+      var card = applicationCard(entry, [
         "受取日　" + formatDate(entry.date),
-        "受取場所　" + entry.place
-      ], [
-        {
-          label: "受け渡し完了",
-          run: function () {
-            updateApplication(entry.id, { status: "取引完了", completedAt: today() });
-            toast("取引が完了しました");
-            renderDeals();
-            renderBadges();
-          }
-        }
-      ]);
+        "受取場所　" + entry.place,
+        "連絡先",
+        "出品者が完了処理をすると履歴に移ります"
+      ], []);
+      fillContact(card, 3, entry.id);
+      return card;
     });
   }
 
   function renderHistory() {
-    var entries = applicationsBy("取引完了").slice().reverse();
-    renderEntryList("history-list", "history-empty", entries, function (entry) {
-      return makeEntryCard(entry, [
-        entry.name,
-        "取引完了日　" + formatDate(entry.completedAt || entry.date)
+    renderEntryList("history-list", "history-empty", historyApplications(), function (entry) {
+      return applicationCard(entry, [
+        "取引完了日　" + formatDate(dateOf(entry.completed_at || entry.created_at)),
+        entry.applicant_id === cache.me ? "ゆずってもらいました" : "ゆずりました"
       ], []);
     });
+  }
+
+  // 出品者側: 自分の出品に届いた申込を、出品ごとにまとめて表示する。
+  function renderReceived() {
+    var list = $("received-list");
+    var entries = receivedApplications().filter(function (item) {
+      return item.status === "申込中" || item.status === "取引中";
+    });
+    list.innerHTML = "";
+
+    myListings().forEach(function (listing) {
+      var mine = entries.filter(function (item) { return item.listing_id === listing.id; });
+      if (!mine.length) return;
+      var heading = document.createElement("h3");
+      heading.className = "section-title";
+      heading.textContent = listing.name;
+      list.appendChild(heading);
+      mine.forEach(function (entry) { list.appendChild(receivedCard(entry, listing)); });
+    });
+
+    $("received-empty").hidden = entries.length > 0;
+  }
+
+  function receivedCard(entry, listing) {
+    var lines = [personLabel(entry.applicant_id)];
+    var actions;
+
+    if (entry.status === "申込中") {
+      lines.push(
+        "希望日　" + formatDate(entry.date),
+        "希望場所　" + entry.place,
+        "メッセージ　" + (entry.message || "")
+      );
+      actions = [
+        {
+          label: "承認する",
+          run: function (event) {
+            changeApplication("approve_application", entry, event.currentTarget,
+              "承認すると、この出品へのほかの申込は自動で取り消されます。承認しますか？",
+              "承認しました。相手の連絡先が表示されます", renderReceived);
+          }
+        },
+        {
+          label: "断る",
+          run: function (event) {
+            changeApplication("cancel_application", entry, event.currentTarget,
+              "この申込を断りますか？", "申込を断りました", renderReceived);
+          }
+        }
+      ];
+    } else {
+      lines.push(
+        "受取日　" + formatDate(entry.date),
+        "受取場所　" + entry.place,
+        "連絡先"
+      );
+      actions = [
+        {
+          label: "受け渡し完了",
+          run: function (event) {
+            changeApplication("complete_application", entry, event.currentTarget,
+              "受け渡しは済みましたか？完了にすると元に戻せません。", "取引が完了しました", renderReceived);
+          }
+        },
+        {
+          label: "取り消す",
+          run: function (event) {
+            changeApplication("cancel_application", entry, event.currentTarget,
+              "この取引を取り消しますか？出品は受付中に戻ります。", "取引を取り消しました", renderReceived);
+          }
+        }
+      ];
+    }
+
+    var card = makeEntryCard(Object.assign({}, entry, { photo_url: listing.photo_url }), lines, actions);
+    if (entry.status === "取引中") fillContact(card, 3, entry.id);
+    return card;
   }
 
   function renderListings() {
@@ -1405,9 +1550,12 @@
     }).length);
     $("badge-favorites").textContent = countLabel(store.favorites().length);
     $("badge-wants").textContent = countLabel(store.wants().length);
+    $("badge-received").textContent = countLabel(receivedApplications().filter(function (item) {
+      return item.status === "申込中";
+    }).length);
     $("badge-applications").textContent = countLabel(applicationsBy("申込中").length);
     $("badge-deals").textContent = countLabel(applicationsBy("取引中").length);
-    $("badge-history").textContent = countLabel(applicationsBy("取引完了").length);
+    $("badge-history").textContent = countLabel(historyApplications().length);
   }
 
   function countLabel(count) {
@@ -1550,6 +1698,7 @@
     "#/favorites": { view: "view-favorites", tabs: true, tab: "#/mypage", render: renderFavorites },
     "#/sell": { view: "view-sell", tabs: true, tab: "#/sell" },
     "#/applications": { view: "view-applications", tabs: true, tab: "#/mypage", render: renderApplications },
+    "#/received": { view: "view-received", tabs: true, tab: "#/mypage", render: renderReceived },
     "#/listings": { view: "view-listings", tabs: true, tab: "#/mypage", render: renderListings },
     "#/deals": { view: "view-deals", tabs: true, tab: "#/deals", render: renderDeals },
     "#/history": { view: "view-history", tabs: true, tab: "#/mypage", render: renderHistory },

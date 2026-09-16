@@ -447,6 +447,17 @@
     </p>
   </main>
 
+  <!-- 届いた申込（出品者側） -->
+  <main class="view" id="view-received" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2>届いた申込</h2>
+    </div>
+
+    <div class="app-list" id="received-list"></div>
+    <p class="empty" id="received-empty" hidden>届いた申込はありません。</p>
+  </main>
+
   <!-- 取引中 -->
   <main class="view" id="view-deals" hidden>
     <div class="screen-head">
@@ -528,6 +539,7 @@
 
     <div class="menu" id="mypage-menu">
       <button type="button" class="menu-item" data-go="#/listings">出品中の商品<span class="badge" id="badge-listings"></span></button>
+      <button type="button" class="menu-item" data-go="#/received">届いた申込<span class="badge" id="badge-received"></span></button>
       <button type="button" class="menu-item" data-go="#/favorites">欲しいものリスト<span class="badge" id="badge-favorites"></span></button>
       <button type="button" class="menu-item" data-go="#/my-wants">投稿した「欲しいです」<span class="badge" id="badge-wants"></span></button>
       <button type="button" class="menu-item" data-go="#/applications">申込中の商品<span class="badge" id="badge-applications"></span></button>
