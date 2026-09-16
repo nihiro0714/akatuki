@@ -290,6 +290,7 @@
       <div class="spec"><span>受け渡し可能期間</span><span class="value" id="detail-period"></span></div>
       <div class="spec"><span>受け渡し場所</span><span class="value" id="detail-pickup"></span></div>
       <div class="spec"><span>キャンパス</span><span class="value" id="detail-campus"></span></div>
+      <div class="spec"><span>出品者</span><span class="value" id="detail-owner"></span></div>
     </div>
 
     <div class="actions">
@@ -358,7 +359,7 @@
     <button type="button" class="photo-picker" id="sell-photo">
       <span id="sell-photo-label">写真を追加</span>
     </button>
-    <input type="file" id="sell-photo-input" accept="image/*" hidden>
+    <input type="file" id="sell-photo-input" accept="image/*,.heic,.heif" hidden>
     <button type="button" class="photo-remove" id="sell-photo-remove" hidden>写真を削除</button>
     <p class="error center-error" id="sell-photo-error" role="alert"></p>
 
@@ -493,7 +494,7 @@
 
     <div class="profile">
       <button type="button" class="avatar" id="mypage-avatar" aria-label="プロフィール画像を変更"></button>
-      <input type="file" id="mypage-avatar-input" accept="image/*" hidden>
+      <input type="file" id="mypage-avatar-input" accept="image/*,.heic,.heif" hidden>
 
       <div id="mypage-view">
         <p class="profile-name" id="mypage-name"></p>

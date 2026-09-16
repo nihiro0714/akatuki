@@ -1,7 +1,7 @@
 /* YUマーケット
    山口大学の学内で不要になった物を無償でゆずりあうサイト。
-   ログインとプロフィールは Supabase に保存する。
-   出品・申込は移行中で、まだこの端末の localStorage に保存している。 */
+   ログイン・プロフィール・出品は Supabase に保存する。
+   申込は移行中で、まだこの端末の localStorage に保存している。 */
 (function () {
   "use strict";
 
@@ -50,7 +50,12 @@
     { id: "w5", name: "自転車の空気入れ", category: "その他", color: "ブラック", pickup: "大学構内", period: "相談可", campus: "常盤", author: "農学部 4年", createdAt: "2026-09-01", description: "たまに借りられれば十分なので、使っていないものがあればぜひ。" }
   ];
 
-  var MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+  var MAX_PHOTO_SIDE = 1024;
+
+  // iPhone の写真（HEIC）を読めないブラウザ向けの変換ライブラリ。必要になったときだけ読み込む。
+  var HEIC_CONVERTER_URL = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
+
+  var LISTING_STATUS = { open: "出品中", reserved: "取引中", done: "譲渡済み", cancelled: "取消済み" };
   var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
   // 「欲しいです」と欲しいものリストは今回は公開しない。コードは残し、ルートと入口だけ閉じる。
@@ -121,27 +126,100 @@
     return Number(parts[0]) + "年" + Number(parts[1]) + "月" + Number(parts[2]) + "日";
   }
 
+  // Date（または created_at の文字列）を、この端末の日付で "YYYY-MM-DD" にする。
+  function dateOf(value) {
+    var date = new Date(value);
+    var month = String(date.getMonth() + 1);
+    var day = String(date.getDate());
+    return date.getFullYear() + "-" + (month.length < 2 ? "0" + month : month) + "-" + (day.length < 2 ? "0" + day : day);
+  }
+
   function today() {
-    var now = new Date();
-    var month = String(now.getMonth() + 1);
-    var day = String(now.getDate());
-    return now.getFullYear() + "-" + (month.length < 2 ? "0" + month : month) + "-" + (day.length < 2 ? "0" + day : day);
+    return dateOf(new Date());
   }
 
-  function setPhoto(element, photo) {
-    element.style.backgroundImage = photo ? "url(" + photo + ")" : "";
+  function setPhoto(element, url) {
+    element.style.backgroundImage = url ? "url(" + JSON.stringify(url) + ")" : "";
   }
 
-  function readPhoto(file, onDone, onError) {
-    if (!file) return;
-    if (file.size > MAX_PHOTO_BYTES) {
-      onError("画像は3MB以下にしてください");
-      return;
+  function loadImage(blob) {
+    return new Promise(function (resolve, reject) {
+      var source = URL.createObjectURL(blob);
+      var image = new Image();
+      image.onload = function () {
+        URL.revokeObjectURL(source);
+        resolve(image);
+      };
+      image.onerror = function () {
+        URL.revokeObjectURL(source);
+        reject(new Error("画像を読み込めませんでした"));
+      };
+      image.src = source;
+    });
+  }
+
+  // 拡張子や MIME が付いていないこともあるので、中身の先頭（ftyp ボックス）でも判定する。
+  async function isHeic(file) {
+    if (/\.hei[cf]$/i.test(file.name || "") || /hei[cf]/i.test(file.type)) return true;
+    var bytes = new Uint8Array(await file.slice(4, 12).arrayBuffer());
+    return /^ftyp(heic|heix|hevc|hevx|heim|heis|mif1|msf1)$/.test(String.fromCharCode.apply(null, bytes));
+  }
+
+  var heicConverter = null;
+  function loadHeicConverter() {
+    if (!heicConverter) {
+      heicConverter = new Promise(function (resolve, reject) {
+        var script = document.createElement("script");
+        script.src = HEIC_CONVERTER_URL;
+        script.onload = function () { resolve(window.heic2any); };
+        script.onerror = function () {
+          heicConverter = null;
+          reject(new Error("変換ライブラリを読み込めませんでした"));
+        };
+        document.head.appendChild(script);
+      });
     }
-    var reader = new FileReader();
-    reader.onload = function () { onDone(String(reader.result)); };
-    reader.onerror = function () { onError("画像を読み込めませんでした"); };
-    reader.readAsDataURL(file);
+    return heicConverter;
+  }
+
+  // スマホの写真はそのままだと重いので、長辺 1024px・品質 0.8 の JPEG に縮める。
+  async function resizeImage(file) {
+    var image;
+    try {
+      image = await loadImage(file);
+    } catch (error) {
+      // iPhone の HEIC 写真は Windows の Chrome などでは読めないので、JPEG に変換してから読む。
+      if (!(await isHeic(file))) throw error;
+      toast("写真を変換しています…");
+      var heic2any = await loadHeicConverter();
+      var converted = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.9 });
+      image = await loadImage(Array.isArray(converted) ? converted[0] : converted);
+    }
+
+    var scale = Math.min(1, MAX_PHOTO_SIDE / Math.max(image.naturalWidth, image.naturalHeight));
+    var canvas = document.createElement("canvas");
+    canvas.width = Math.round(image.naturalWidth * scale);
+    canvas.height = Math.round(image.naturalHeight * scale);
+    var context = canvas.getContext("2d");
+    // 透過 PNG は JPEG にすると黒くなるので、白で下地を塗っておく。
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (blob) resolve(blob);
+        else reject(new Error("画像を変換できませんでした"));
+      }, "image/jpeg", 0.8);
+    });
+  }
+
+  // Storage の photos/<自分のid>/ に上げて、公開 URL を返す。
+  async function uploadPhoto(blob) {
+    var path = cache.me + "/" + Date.now() + ".jpg";
+    var result = await sb.storage.from("photos").upload(path, blob, { contentType: "image/jpeg" });
+    if (result.error) throw result.error;
+    return sb.storage.from("photos").getPublicUrl(path).data.publicUrl;
   }
 
   /* ------------------------------------------------------------------
@@ -189,8 +267,7 @@
     profile: function () {
       return cache.profiles[cache.me] || { id: cache.me, name: "", faculty: "", campus: "", photo_url: null };
     },
-    listings: function () { return read("yum.listings", []); },
-    saveListings: function (value) { return write("yum.listings", value); },
+    listings: function () { return cache.listings; },
     applications: function () { return read("yum.applications", []); },
     saveApplications: function (value) { return write("yum.applications", value); },
     wants: function () { return read("yum.wants", []); },
@@ -199,8 +276,17 @@
     saveFavorites: function (value) { return write("yum.favorites", value); }
   };
 
+  // cache.listings は新しい順。取消・譲渡済みも含むので、探す画面では openProducts() を使う。
   function allProducts() {
-    return store.listings().concat(SAMPLE);
+    return store.listings();
+  }
+
+  function openProducts() {
+    return allProducts().filter(function (item) { return item.status === "open"; });
+  }
+
+  function myListings() {
+    return allProducts().filter(function (item) { return item.owner_id === cache.me; });
   }
 
   function allWants() {
@@ -252,7 +338,7 @@
 
     var thumb = document.createElement("div");
     thumb.className = "thumb";
-    setPhoto(thumb, item.photo);
+    setPhoto(thumb, item.photo_url);
     card.appendChild(thumb);
 
     var name = document.createElement("p");
@@ -277,7 +363,7 @@
 
     var round = document.createElement("div");
     round.className = "round";
-    setPhoto(round, item.photo);
+    setPhoto(round, item.photo_url);
     card.appendChild(round);
 
     var lines = document.createElement("div");
@@ -652,17 +738,14 @@
     function render() {
       var checked = [];
       each(categories.querySelectorAll("input:checked"), function (box) { checked.push(box.value); });
-      var items = allProducts().filter(function (item) {
+      var items = openProducts().filter(function (item) {
         return checked.length === 0 || checked.indexOf(item.category) >= 0;
       });
 
-      fillGrid($("home-recommended"), $("home-recommended-empty"),
-        items.filter(function (item) { return item.recommended; }).slice(0, 4));
+      // おすすめの仕組みはまだ無いので、新着の上位で代用する。
+      fillGrid($("home-recommended"), $("home-recommended-empty"), items.slice(0, 4));
 
-      fillGrid($("home-latest"), $("home-latest-empty"),
-        items.slice().sort(function (a, b) {
-          return String(b.createdAt).localeCompare(String(a.createdAt));
-        }).slice(0, 6));
+      fillGrid($("home-latest"), $("home-latest-empty"), items.slice(0, 6));
     }
 
     return { render: render };
@@ -683,7 +766,7 @@
 
     function render() {
       fillGrid($("search-results"), $("search-empty"),
-        allProducts().filter(function (item) {
+        openProducts().filter(function (item) {
           return filters.matches(item, input.value.trim());
         }));
     }
@@ -716,7 +799,7 @@
 
       var list = $("results-list");
       list.innerHTML = "";
-      var items = allProducts().filter(function (item) {
+      var items = openProducts().filter(function (item) {
         return search.filters.matches(item, keyword);
       });
       items.forEach(function (item) { list.appendChild(makeResultCard(item)); });
@@ -922,7 +1005,7 @@
       }
 
       $("detail-name").textContent = item.name;
-      setPhoto($("detail-photo"), item.photo);
+      setPhoto($("detail-photo"), item.photo_url);
       $("detail-description").textContent = item.description || "（説明はありません）";
       $("detail-category").textContent = item.category;
       $("detail-color").textContent = item.color || "指定なし";
@@ -931,16 +1014,25 @@
       $("detail-pickup").textContent = item.pickup;
       $("detail-campus").textContent = item.campus;
 
+      var owner = cache.profiles[item.owner_id] || {};
+      $("detail-owner").textContent = [
+        owner.name || "名前未設定",
+        owner.faculty,
+        owner.campus ? owner.campus + "キャンパス" : ""
+      ].filter(Boolean).join("・");
+
       var applied = store.applications().some(function (entry) {
         return String(entry.productId) === String(item.id) && entry.status !== "取引完了";
       });
-      var mine = store.listings().some(function (entry) { return String(entry.id) === String(item.id); });
+      var mine = item.owner_id === cache.me;
+      var closed = item.status !== "open";
 
       var button = $("detail-apply");
       var note = $("detail-note");
-      button.disabled = applied || mine;
-      note.hidden = !(applied || mine);
-      if (mine) note.textContent = "自分が出品した商品です";
+      button.disabled = applied || mine || closed;
+      note.hidden = !(applied || mine || closed);
+      if (mine) note.textContent = "自分の出品です";
+      else if (closed) note.textContent = "この商品の受付は終了しました";
       else if (applied) note.textContent = "この商品はすでに申し込み済みです";
 
       renderFavoriteButton();
@@ -1003,7 +1095,7 @@
         id: "a" + Date.now(),
         productId: current.id,
         name: current.name,
-        photo: current.photo || "",
+        photo_url: current.photo_url || "",
         appliedAt: today(),
         date: date.value,
         place: place.value,
@@ -1028,7 +1120,7 @@
         go("#/search");
         return;
       }
-      setPhoto($("confirm-photo"), item.photo);
+      setPhoto($("confirm-photo"), item.photo_url);
       date.min = today();
       ["confirm-date-error", "confirm-place-error", "confirm-message-error", "confirm-agree-error"].forEach(function (key) {
         $(key).textContent = "";
@@ -1054,33 +1146,35 @@
     var photoLabel = $("sell-photo-label");
     var pickers = pickerGroup(form);
     var chosen = pickers.values;
-    var photo = "";
+    var photo = null;    // 縮小済みの JPEG（Blob）。出品するときに Storage へ上げる。
+    var preview = "";
+
+    function showPhoto(blob) {
+      if (preview) URL.revokeObjectURL(preview);
+      photo = blob;
+      preview = blob ? URL.createObjectURL(blob) : "";
+      setPhoto(photoButton, preview);
+      photoLabel.hidden = Boolean(blob);
+      photoRemove.hidden = !blob;
+    }
 
     photoButton.addEventListener("click", function () { photoInput.click(); });
 
-    photoInput.addEventListener("change", function () {
+    photoInput.addEventListener("change", async function () {
       var file = photoInput.files && photoInput.files[0];
-      if (!file) return;
-      readPhoto(file, function (dataUrl) {
-        photo = dataUrl;
-        setPhoto(photoButton, photo);
-        photoLabel.hidden = true;
-        photoRemove.hidden = false;
-        setError(null, $("sell-photo-error"), "");
-      }, function (text) {
-        setError(null, $("sell-photo-error"), text);
-      });
       photoInput.value = "";
+      if (!file) return;
+      try {
+        showPhoto(await resizeImage(file));
+        setError(null, $("sell-photo-error"), "");
+      } catch (error) {
+        setError(null, $("sell-photo-error"), "この写真は読み込めませんでした。別の写真をお試しください");
+      }
     });
 
-    photoRemove.addEventListener("click", function () {
-      photo = "";
-      setPhoto(photoButton, "");
-      photoLabel.hidden = false;
-      photoRemove.hidden = true;
-    });
+    photoRemove.addEventListener("click", function () { showPhoto(null); });
 
-    form.addEventListener("submit", function (event) {
+    form.addEventListener("submit", async function (event) {
       event.preventDefault();
 
       var ok = name.value.trim()
@@ -1103,28 +1197,32 @@
 
       if (!ok) return;
 
-      var listings = store.listings();
-      listings.push({
-        id: "u" + Date.now(),
-        name: name.value.trim(),
-        category: chosen.category,
-        color: chosen.color,
-        condition: chosen.condition,
-        period: chosen.period,
-        pickup: chosen.pickup,
-        campus: chosen.campus,
-        description: description.value.trim(),
-        photo: photo,
-        recommended: false,
-        mine: true,
-        createdAt: today()
-      });
-
-      if (!store.saveListings(listings)) {
-        setError(null, $("sell-photo-error"), "保存できませんでした。写真のサイズを小さくしてください");
+      var button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      try {
+        var photoUrl = await uploadPhoto(photo);
+        var result = await sb.from("listings").insert({
+          owner_id: cache.me,
+          name: name.value.trim(),
+          category: chosen.category,
+          color: chosen.color,
+          condition: chosen.condition,
+          period: chosen.period,
+          pickup: chosen.pickup,
+          campus: chosen.campus,
+          description: description.value.trim(),
+          photo_url: photoUrl
+        });
+        if (result.error) throw result.error;
+      } catch (error) {
+        button.disabled = false;
+        toast("出品できませんでした。通信状況を確認して、もう一度お試しください");
         return;
       }
 
+      // 出品自体は済んでいるので、読み直しに失敗しても二重に出品させないよう完了扱いにする。
+      try { await refresh(); } catch (error) { /* 次の読み込みで反映される */ }
+      button.disabled = false;
       reset();
       toast("出品しました");
       go("#/listings");
@@ -1132,10 +1230,7 @@
 
     function reset() {
       form.reset();
-      photo = "";
-      setPhoto(photoButton, "");
-      photoLabel.hidden = false;
-      photoRemove.hidden = true;
+      showPhoto(null);
       pickers.reset();
       each(form.querySelectorAll(".error"), function (box) { box.textContent = ""; });
       $("sell-photo-error").textContent = "";
@@ -1162,7 +1257,7 @@
 
     var thumb = document.createElement("div");
     thumb.className = "thumb";
-    setPhoto(thumb, entry.photo);
+    setPhoto(thumb, entry.photo_url);
     card.appendChild(thumb);
 
     var body = document.createElement("div");
@@ -1266,34 +1361,48 @@
   }
 
   function renderListings() {
-    var entries = store.listings().slice().reverse();
-    renderEntryList("listings-list", "listings-empty", entries, function (entry) {
-      return makeEntryCard(entry, [
-        entry.name,
-        "出品日　" + formatDate(entry.createdAt),
-        entry.category + "・" + entry.campus
-      ], [
+    renderEntryList("listings-list", "listings-empty", myListings(), function (entry) {
+      var actions = [
         {
           label: "商品ページを見る",
           run: function () { go("#/item/" + entry.id); }
-        },
-        {
+        }
+      ];
+
+      // 取引中の出品は申込側と状態がずれるので、ここでは受付中のものだけ取り消せる。
+      if (entry.status === "open") {
+        actions.push({
           label: "出品を取り消す",
-          run: function () {
-            store.saveListings(store.listings().filter(function (item) {
-              return item.id !== entry.id;
-            }));
+          run: async function (event) {
+            if (!window.confirm("「" + entry.name + "」の出品を取り消しますか？")) return;
+            var button = event.currentTarget;
+            button.disabled = true;
+            var result = await sb.from("listings").update({ status: "cancelled" }).eq("id", entry.id).select();
+            if (result.error || !result.data || !result.data.length) {
+              button.disabled = false;
+              toast("取り消せませんでした。もう一度お試しください");
+              return;
+            }
+            try { await refresh(); } catch (error) { entry.status = "cancelled"; }
             toast("出品を取り消しました");
             renderListings();
             renderBadges();
           }
-        }
-      ]);
+        });
+      }
+
+      return makeEntryCard(Object.assign({}, entry, { status: LISTING_STATUS[entry.status] }), [
+        entry.name,
+        "出品日　" + formatDate(dateOf(entry.created_at)),
+        entry.category + "・" + entry.campus
+      ], actions);
     });
   }
 
   function renderBadges() {
-    $("badge-listings").textContent = countLabel(store.listings().length);
+    $("badge-listings").textContent = countLabel(myListings().filter(function (item) {
+      return item.status === "open";
+    }).length);
     $("badge-favorites").textContent = countLabel(store.favorites().length);
     $("badge-wants").textContent = countLabel(store.wants().length);
     $("badge-applications").textContent = countLabel(applicationsBy("申込中").length);
@@ -1328,10 +1437,25 @@
 
     avatar.addEventListener("click", function () { avatarInput.click(); });
 
-    // プロフィール画像は、出品写真の保存先（Storage）と一緒に用意する。
-    avatarInput.addEventListener("change", function () {
+    avatarInput.addEventListener("change", async function () {
+      var file = avatarInput.files && avatarInput.files[0];
       avatarInput.value = "";
-      toast("プロフィール画像の変更は準備中です");
+      if (!file) return;
+      avatar.disabled = true;
+      try {
+        var url = await uploadPhoto(await resizeImage(file));
+        var result = await sb.from("profiles").update({ photo_url: url }).eq("id", cache.me).select();
+        if (result.error || !result.data || !result.data.length) throw result.error || new Error("更新できませんでした");
+        cache.profiles[cache.me] = result.data[0];
+      } catch (error) {
+        avatar.disabled = false;
+        toast("プロフィール画像を保存できませんでした");
+        return;
+      }
+      try { await refresh(); } catch (error) { /* 保存済みの行を表示する */ }
+      avatar.disabled = false;
+      setPhoto(avatar, store.profile().photo_url);
+      toast("プロフィール画像を変更しました");
     });
 
     $("mypage-edit").addEventListener("click", function () { setEditing(true); });
