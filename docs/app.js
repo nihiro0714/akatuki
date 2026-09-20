@@ -167,6 +167,17 @@
     });
   }
 
+  // 出品を消したときに、Storage に残る写真も消す。権限が無い場合は写真だけ残る。
+  async function removePhoto(url) {
+    var path = String(url || "").split("/object/public/photos/")[1];
+    if (!path) return;
+    try {
+      await sb.storage.from("photos").remove([path]);
+    } catch (error) {
+      /* 消せなくても出品の削除は済んでいるので続行する */
+    }
+  }
+
   // Storage の photos/<自分のid>/ に上げて、公開 URL を返す。
   async function uploadPhoto(blob) {
     var path = cache.me + "/" + Date.now() + ".jpg";
@@ -1237,22 +1248,27 @@
         }
       ];
 
-      // 取引中の出品は申込側と状態がずれるので、ここでは受付中のものだけ取り消せる。
-      if (entry.status === "open") {
+      // 取引中の出品は申込側と状態がずれるので、取り消せるのは受付中のものだけ。
+      // 以前の版で「取消済み」にした出品も、ここから消せるようにしておく。
+      if (entry.status === "open" || entry.status === "cancelled") {
         actions.push({
-          label: "出品を取り消す",
+          label: entry.status === "open" ? "出品を取り消す" : "データを消す",
           run: async function (event) {
-            if (!window.confirm("「" + entry.name + "」の出品を取り消しますか？")) return;
+            var question = entry.status === "open"
+              ? "「" + entry.name + "」の出品を取り消しますか？\n出品・写真・届いている申し込みは完全に消え、元に戻せません。"
+              : "「" + entry.name + "」のデータを消しますか？\n元に戻せません。";
+            if (!window.confirm(question)) return;
             var button = event.currentTarget;
             button.disabled = true;
-            var result = await sb.from("listings").update({ status: "cancelled" }).eq("id", entry.id).select();
+            var result = await sb.from("listings").delete().eq("id", entry.id).select();
             if (result.error || !result.data || !result.data.length) {
               button.disabled = false;
               toast("取り消せませんでした。もう一度お試しください");
               return;
             }
-            try { await refresh(); } catch (error) { entry.status = "cancelled"; }
-            toast("出品を取り消しました");
+            await removePhoto(entry.photo_url);
+            try { await refresh(); } catch (error) { /* 次の読み込みで反映される */ }
+            toast(entry.status === "open" ? "出品を取り消しました" : "データを消しました");
             renderListings();
             renderBadges();
           }
