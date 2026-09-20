@@ -1,7 +1,7 @@
 /* YUマーケット
    山口大学の学内で不要になった物を無償でゆずりあうサイト。
-   ログイン・プロフィール・出品・申込は Supabase に保存する。
-   公開していない「欲しいです」と欲しいものリストだけは、この端末の localStorage に残している。 */
+   データはすべて Supabase に保存する。端末に残るのはログイン状態だけで、
+   それは supabase-js が認証トークンを保存しているもの。 */
 (function () {
   "use strict";
 
@@ -10,7 +10,6 @@
   ------------------------------------------------------------------ */
   var OPTIONS = {
     category: ["家具", "家電", "教科書", "その他"],
-    color: ["ホワイト", "ブラック", "ブラウン", "グレー", "ナチュラル", "その他"],
     condition: ["未使用に近い", "目立った傷なし", "やや傷や汚れあり", "傷や汚れあり", "書き込みあり"],
     period: ["今週中", "今月中", "相談可"],
     pickup: ["大学構内", "最寄り駅", "学生寮"],
@@ -20,7 +19,6 @@
   // 検索画面の絞り込み項目（ワイヤーフレームの並び）。
   var FILTERS = [
     { key: "category", label: "カテゴリー" },
-    { key: "color", label: "色" },
     { key: "pickup", label: "受取場所" },
     { key: "period", label: "取引可能期間" },
     { key: "campus", label: "キャンパス" }
@@ -34,9 +32,6 @@
   var LISTING_STATUS = { open: "出品中", reserved: "取引中", done: "譲渡済み", cancelled: "取消済み" };
   var EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  // 「欲しいです」と欲しいものリストは今回は公開しない。コードは残し、ルートと入口だけ閉じる。
-  var ENABLE_WANTS = false;
-
   var UNIVERSITY_EMAIL = /@yamaguchi-u\.ac\.jp$/i;
 
   // window.supabase はライブラリ本体。接続先は config.js。
@@ -48,24 +43,6 @@
   function $(id) { return document.getElementById(id); }
 
   function each(list, fn) { Array.prototype.forEach.call(list, fn); }
-
-  function read(key, fallback) {
-    try {
-      var raw = window.localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (error) {
-      return fallback;
-    }
-  }
-
-  function write(key, value) {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-      return true;
-    } catch (error) {
-      return false;
-    }
-  }
 
   function setError(input, output, message) {
     if (output) output.textContent = message || "";
@@ -272,11 +249,7 @@
       return cache.profiles[cache.me] || { id: cache.me, name: "", faculty: "", campus: "", photo_url: null };
     },
     listings: function () { return cache.listings; },
-    applications: function () { return cache.applications; },
-    wants: function () { return read("yum.wants", []); },
-    saveWants: function (value) { return write("yum.wants", value); },
-    favorites: function () { return read("yum.favorites", []); },
-    saveFavorites: function (value) { return write("yum.favorites", value); }
+    applications: function () { return cache.applications; }
   };
 
   // cache.listings は新しい順。取消・譲渡済みも含むので、探す画面では openProducts() を使う。
@@ -290,27 +263,6 @@
 
   function myListings() {
     return allProducts().filter(function (item) { return item.owner_id === cache.me; });
-  }
-
-  function allWants() {
-    return store.wants();
-  }
-
-  function wantById(id) {
-    var found = allWants().filter(function (item) { return String(item.id) === String(id); });
-    return found[0] || null;
-  }
-
-  function isFavorite(id) {
-    return store.favorites().some(function (value) { return String(value) === String(id); });
-  }
-
-  function toggleFavorite(id) {
-    var list = store.favorites();
-    var next = list.filter(function (value) { return String(value) !== String(id); });
-    if (next.length === list.length) next.push(id);
-    store.saveFavorites(next);
-    return next.length > list.length;
   }
 
   function productById(id) {
@@ -379,7 +331,7 @@
     return card;
   }
 
-  // 商品にも「欲しいです」にも使う、丸い画像＋4行のカード。
+  // 丸い画像＋4行のカード。
   function makeResultCard(item, prefix) {
     var card = document.createElement("button");
     card.type = "button";
@@ -392,7 +344,7 @@
 
     var lines = document.createElement("div");
     lines.className = "lines";
-    [item.name, item.category, item.color, item.period].forEach(function (text, index) {
+    [item.name, item.category, item.period, item.campus].forEach(function (text, index) {
       var line = document.createElement("span");
       if (index > 0) line.className = "sub";
       line.textContent = text || "—";
@@ -583,16 +535,6 @@
       return ok;
     }
 
-    function set(key, value) {
-      var field = fields[key];
-      if (!field || OPTIONS[key].indexOf(value) < 0) return;
-      each(field.querySelectorAll(".picker-panel input"), function (radio) {
-        radio.checked = radio.value === value;
-      });
-      values[key] = value;
-      field.querySelector(".chosen").textContent = value;
-    }
-
     function reset() {
       Object.keys(fields).forEach(function (key) {
         var field = fields[key];
@@ -606,7 +548,7 @@
       });
     }
 
-    return { values: values, validate: validate, set: set, reset: reset };
+    return { values: values, validate: validate, reset: reset };
   }
 
   /* ------------------------------------------------------------------
@@ -766,10 +708,7 @@
         return checked.length === 0 || checked.indexOf(item.category) >= 0;
       });
 
-      // おすすめの仕組みはまだ無いので、新着の上位で代用する。
-      fillGrid($("home-recommended"), $("home-recommended-empty"), items.slice(0, 4));
-
-      fillGrid($("home-latest"), $("home-latest-empty"), items.slice(0, 6));
+      fillGrid($("home-latest"), $("home-latest-empty"), items);
     }
 
     return { render: render };
@@ -834,168 +773,6 @@
   })();
 
   /* ------------------------------------------------------------------
-     「欲しいです」（ゆずってほしい物の募集）
-  ------------------------------------------------------------------ */
-  var wants = (function () {
-    var input = $("wants-input");
-    var filters = filterGroup($("wants-filters"), function () { /* 結果画面で反映する */ });
-    var keyword = "";
-
-    $("wants-form").addEventListener("submit", function (event) {
-      event.preventDefault();
-      open();
-    });
-
-    $("wants-search").addEventListener("click", open);
-
-    function open() {
-      keyword = input.value.trim();
-      go("#/wants-results");
-    }
-
-    function setKeyword(value) {
-      keyword = value;
-      input.value = value;
-    }
-
-    function render() {
-      $("wants-results-title").textContent = keyword
-        ? "“" + keyword + "”検索結果"
-        : "“欲しいです”検索結果";
-
-      fillChips($("wants-chips"), keyword, filters, setKeyword, render);
-
-      var list = $("wants-list");
-      list.innerHTML = "";
-      var items = allWants().filter(function (item) {
-        return filters.matches(item, keyword);
-      });
-      items.forEach(function (item) { list.appendChild(makeResultCard(item, "#/want/")); });
-      $("wants-empty").hidden = items.length > 0;
-    }
-
-    return { render: render, setKeyword: setKeyword };
-  })();
-
-  var wantDetail = (function () {
-    var current = null;
-
-    $("want-offer").addEventListener("click", function () {
-      if (!current) return;
-      sell.prefill(current);
-      toast("募集内容を出品フォームに反映しました");
-      go("#/sell");
-    });
-
-    $("want-delete").addEventListener("click", function () {
-      if (!current) return;
-      store.saveWants(store.wants().filter(function (item) { return item.id !== current.id; }));
-      toast("投稿を取り消しました");
-      go("#/my-wants");
-    });
-
-    function render(id) {
-      var want = wantById(id);
-      current = want;
-      if (!want) {
-        go("#/wants");
-        return;
-      }
-
-      $("want-name").textContent = want.name;
-      $("want-description").textContent = want.description || "（補足はありません）";
-      $("want-category").textContent = want.category;
-      $("want-color").textContent = want.color;
-      $("want-pickup").textContent = want.pickup;
-      $("want-period").textContent = want.period;
-      $("want-campus").textContent = want.campus;
-      $("want-author").textContent = want.author;
-      $("want-date").textContent = formatDate(want.createdAt);
-
-      var mine = store.wants().some(function (item) { return item.id === want.id; });
-      $("want-delete").hidden = !mine;
-      $("want-offer").disabled = mine;
-      $("want-note").hidden = !mine;
-      if (mine) $("want-note").textContent = "自分が投稿した「欲しいです」です";
-    }
-
-    return { render: render };
-  })();
-
-  (function wantForm() {
-    var form = $("want-form");
-    var name = $("want-input-name");
-    var description = $("want-input-description");
-    var pickers = pickerGroup(form);
-
-    form.addEventListener("submit", function (event) {
-      event.preventDefault();
-
-      var ok = name.value.trim()
-        ? setError(name, $("want-name-error"), "")
-        : setError(name, $("want-name-error"), "欲しい物を入力してください");
-
-      if (!pickers.validate()) ok = false;
-      if (!ok) return;
-
-      var profile = store.profile();
-      var list = store.wants();
-      list.push({
-        id: "w" + Date.now(),
-        name: name.value.trim(),
-        category: pickers.values.category,
-        color: pickers.values.color,
-        pickup: pickers.values.pickup,
-        period: pickers.values.period,
-        campus: pickers.values.campus,
-        description: description.value.trim(),
-        author: profile.name,
-        createdAt: today()
-      });
-      store.saveWants(list);
-
-      form.reset();
-      pickers.reset();
-      each(form.querySelectorAll(".error"), function (box) { box.textContent = ""; });
-      toast("「欲しいです」を投稿しました");
-      go("#/my-wants");
-    });
-  })();
-
-  function renderMyWants() {
-    var entries = store.wants().slice().reverse();
-    renderEntryList("my-wants-list", "my-wants-empty", entries, function (entry) {
-      return makeEntryCard(entry, [
-        entry.name,
-        "投稿日　" + formatDate(entry.createdAt),
-        entry.category + "・" + entry.color + "・" + entry.period
-      ], [
-        {
-          label: "投稿を見る",
-          run: function () { go("#/want/" + entry.id); }
-        },
-        {
-          label: "投稿を取り消す",
-          run: function () {
-            store.saveWants(store.wants().filter(function (item) { return item.id !== entry.id; }));
-            toast("投稿を取り消しました");
-            renderMyWants();
-            renderBadges();
-          }
-        }
-      ]);
-    });
-  }
-
-  function renderFavorites() {
-    var items = store.favorites().map(productById).filter(Boolean).reverse();
-    var list = $("favorites-list");
-    list.innerHTML = "";
-    items.forEach(function (item) { list.appendChild(makeResultCard(item)); });
-    $("favorites-empty").hidden = items.length > 0;
-  }
-
-  /* ------------------------------------------------------------------
      商品詳細
   ------------------------------------------------------------------ */
   var detail = (function () {
@@ -1004,21 +781,6 @@
     $("detail-apply").addEventListener("click", function () {
       if (current) go("#/apply/" + current.id);
     });
-
-    $("detail-favorite").addEventListener("click", function () {
-      if (!current) return;
-      var added = toggleFavorite(current.id);
-      renderFavoriteButton();
-      toast(added ? "欲しいものリストに追加しました" : "欲しいものリストから外しました");
-    });
-
-    function renderFavoriteButton() {
-      var button = $("detail-favorite");
-      var on = current && isFavorite(current.id);
-      button.setAttribute("aria-pressed", on ? "true" : "false");
-      button.querySelector(".heart").textContent = on ? "♥" : "♡";
-      $("detail-favorite-label").textContent = on ? "欲しいものリストに追加済み" : "欲しいものリストに追加";
-    }
 
     function render(id) {
       var item = productById(id);
@@ -1032,7 +794,6 @@
       setPhoto($("detail-photo"), item.photo_url);
       $("detail-description").textContent = item.description || "（説明はありません）";
       $("detail-category").textContent = item.category;
-      $("detail-color").textContent = item.color || "指定なし";
       $("detail-condition").textContent = item.condition;
       $("detail-period").textContent = item.period;
       $("detail-pickup").textContent = item.pickup;
@@ -1054,8 +815,6 @@
       if (mine) note.textContent = "自分の出品です";
       else if (closed) note.textContent = "この商品の受付は終了しました";
       else if (applied) note.textContent = "この商品はすでに申し込み済みです";
-
-      renderFavoriteButton();
     }
 
     return { render: render };
@@ -1140,7 +899,7 @@
       button.disabled = false;
       form.reset();
       toast("申し込みました");
-      go("#/applications");
+      go("#/transactions");
     });
 
     function render(id) {
@@ -1170,7 +929,7 @@
   /* ------------------------------------------------------------------
      出品
   ------------------------------------------------------------------ */
-  var sell = (function () {
+  (function sell() {
     var form = $("sell-form");
     var name = $("sell-name");
     var description = $("sell-description");
@@ -1239,7 +998,6 @@
           owner_id: cache.me,
           name: name.value.trim(),
           category: chosen.category,
-          color: chosen.color,
           condition: chosen.condition,
           period: chosen.period,
           pickup: chosen.pickup,
@@ -1270,20 +1028,11 @@
       $("sell-photo-error").textContent = "";
     }
 
-    // 「欲しいです」の募集内容を出品フォームに引き継ぐ。
-    function prefill(want) {
-      reset();
-      name.value = want.name;
-      ["category", "color", "pickup", "period", "campus"].forEach(function (key) {
-        pickers.set(key, want[key]);
-      });
-    }
-
-    return { prefill: prefill };
+    return {};
   })();
 
   /* ------------------------------------------------------------------
-     申込中 / 取引中 / 取引履歴 / 出品中
+     取引（届いた申込・申込中・取引中・履歴）/ 出品中
   ------------------------------------------------------------------ */
   function makeEntryCard(entry, lines, actions) {
     var card = document.createElement("div");
@@ -1375,7 +1124,7 @@
           label: "申し込みを取り消す",
           run: function (event) {
             changeApplication("cancel_application", entry, event.currentTarget,
-              "この申し込みを取り消しますか？", "申し込みを取り消しました", renderApplications);
+              "この申し込みを取り消しますか？", "申し込みを取り消しました", renderTransactions);
           }
         }
       ]);
@@ -1404,29 +1153,27 @@
     });
   }
 
-  // 出品者側: 自分の出品に届いた申込を、出品ごとにまとめて表示する。
+  // 取引の画面は、届いた申込・申込中・取引中・履歴をまとめて描き直す。
+  function renderTransactions() {
+    renderReceived();
+    renderApplications();
+    renderDeals();
+    renderHistory();
+    renderBadges();
+  }
+
+  // 出品者側: 自分の出品に届いた申込。
   function renderReceived() {
-    var list = $("received-list");
     var entries = receivedApplications().filter(function (item) {
       return item.status === "申込中" || item.status === "取引中";
     });
-    list.innerHTML = "";
-
-    myListings().forEach(function (listing) {
-      var mine = entries.filter(function (item) { return item.listing_id === listing.id; });
-      if (!mine.length) return;
-      var heading = document.createElement("h3");
-      heading.className = "section-title";
-      heading.textContent = listing.name;
-      list.appendChild(heading);
-      mine.forEach(function (entry) { list.appendChild(receivedCard(entry, listing)); });
+    renderEntryList("received-list", "received-empty", entries, function (entry) {
+      return receivedCard(entry, listingOf(entry) || {});
     });
-
-    $("received-empty").hidden = entries.length > 0;
   }
 
   function receivedCard(entry, listing) {
-    var lines = [personLabel(entry.applicant_id)];
+    var lines = [listing.name || "（商品が見つかりません）", personLabel(entry.applicant_id)];
     var actions;
 
     if (entry.status === "申込中") {
@@ -1441,14 +1188,14 @@
           run: function (event) {
             changeApplication("approve_application", entry, event.currentTarget,
               "承認すると、この出品へのほかの申込は自動で取り消されます。承認しますか？",
-              "承認しました。相手の連絡先が表示されます", renderReceived);
+              "承認しました。相手の連絡先が表示されます", renderTransactions);
           }
         },
         {
           label: "断る",
           run: function (event) {
             changeApplication("cancel_application", entry, event.currentTarget,
-              "この申込を断りますか？", "申込を断りました", renderReceived);
+              "この申込を断りますか？", "申込を断りました", renderTransactions);
           }
         }
       ];
@@ -1463,21 +1210,21 @@
           label: "受け渡し完了",
           run: function (event) {
             changeApplication("complete_application", entry, event.currentTarget,
-              "受け渡しは済みましたか？完了にすると元に戻せません。", "取引が完了しました", renderReceived);
+              "受け渡しは済みましたか？完了にすると元に戻せません。", "取引が完了しました", renderTransactions);
           }
         },
         {
           label: "取り消す",
           run: function (event) {
             changeApplication("cancel_application", entry, event.currentTarget,
-              "この取引を取り消しますか？出品は受付中に戻ります。", "取引を取り消しました", renderReceived);
+              "この取引を取り消しますか？出品は受付中に戻ります。", "取引を取り消しました", renderTransactions);
           }
         }
       ];
     }
 
     var card = makeEntryCard(Object.assign({}, entry, { photo_url: listing.photo_url }), lines, actions);
-    if (entry.status === "取引中") fillContact(card, 3, entry.id);
+    if (entry.status === "取引中") fillContact(card, 4, entry.id);
     return card;
   }
 
@@ -1524,14 +1271,11 @@
     $("badge-listings").textContent = countLabel(myListings().filter(function (item) {
       return item.status === "open";
     }).length);
-    $("badge-favorites").textContent = countLabel(store.favorites().length);
-    $("badge-wants").textContent = countLabel(store.wants().length);
-    $("badge-received").textContent = countLabel(receivedApplications().filter(function (item) {
-      return item.status === "申込中";
-    }).length);
-    $("badge-applications").textContent = countLabel(applicationsBy("申込中").length);
-    $("badge-deals").textContent = countLabel(applicationsBy("取引中").length);
-    $("badge-history").textContent = countLabel(historyApplications().length);
+    $("badge-transactions").textContent = countLabel(
+      receivedApplications().filter(function (item) {
+        return item.status === "申込中" || item.status === "取引中";
+      }).length + applicationsBy("申込中").length + applicationsBy("取引中").length
+    );
   }
 
   function countLabel(count) {
@@ -1650,10 +1394,10 @@
   })();
 
   /* ------------------------------------------------------------------
-     設定
+     ログアウト
   ------------------------------------------------------------------ */
   // この端末だけログアウトする（ほかの端末のログインは残す）。
-  $("settings-logout").addEventListener("click", async function () {
+  $("mypage-logout").addEventListener("click", async function () {
     await sb.auth.signOut({ scope: "local" });
     if (cache.me) leave();
   });
@@ -1667,36 +1411,16 @@
     "#/home": { view: "view-home", tabs: true, tab: "#/home", render: function () { home.render(); } },
     "#/search": { view: "view-search", tabs: true, tab: "#/search", render: function () { search.render(); } },
     "#/results": { view: "view-results", tabs: true, tab: "#/search", render: function () { results.render(); } },
-    "#/wants": { view: "view-wants", tabs: true, tab: "#/search" },
-    "#/wants-results": { view: "view-wants-results", tabs: true, tab: "#/search", render: function () { wants.render(); } },
-    "#/want-new": { view: "view-want-new", tabs: true, tab: "#/search" },
-    "#/my-wants": { view: "view-my-wants", tabs: true, tab: "#/mypage", render: renderMyWants },
-    "#/favorites": { view: "view-favorites", tabs: true, tab: "#/mypage", render: renderFavorites },
     "#/sell": { view: "view-sell", tabs: true, tab: "#/sell" },
     "#/terms": { view: "view-terms", tabs: true, tab: "#/mypage", auth: "any" },
-    "#/applications": { view: "view-applications", tabs: true, tab: "#/mypage", render: renderApplications },
-    "#/received": { view: "view-received", tabs: true, tab: "#/mypage", render: renderReceived },
+    "#/transactions": { view: "view-transactions", tabs: true, tab: "#/mypage", render: renderTransactions },
     "#/listings": { view: "view-listings", tabs: true, tab: "#/mypage", render: renderListings },
-    "#/deals": { view: "view-deals", tabs: true, tab: "#/deals", render: renderDeals },
-    "#/history": { view: "view-history", tabs: true, tab: "#/mypage", render: renderHistory },
-    "#/settings": { view: "view-settings", tabs: true, tab: "#/mypage" },
     "#/mypage": { view: "view-mypage", tabs: true, tab: "#/mypage", render: function () { mypage.render(); } }
   };
 
-  if (!ENABLE_WANTS) {
-    ["#/wants", "#/wants-results", "#/want-new", "#/my-wants", "#/favorites"].forEach(function (hash) {
-      delete ROUTES[hash];
-    });
-    each(document.querySelectorAll(
-      "#view-search .switcher, #detail-favorite, #mypage-menu [data-go='#/favorites'], #mypage-menu [data-go='#/my-wants']"
-    ), function (element) {
-      element.hidden = true;
-    });
-  }
-
   function route() {
     var hash = window.location.hash || "#/login";
-    var match = (ENABLE_WANTS ? /^#\/(item|apply|want)\/(.+)$/ : /^#\/(item|apply)\/(.+)$/).exec(hash);
+    var match = /^#\/(item|apply)\/(.+)$/.exec(hash);
     var config;
     var param = null;
 
@@ -1704,10 +1428,8 @@
       param = match[2];
       if (match[1] === "item") {
         config = { view: "view-detail", tabs: true, tab: "#/search", render: function () { detail.render(param); } };
-      } else if (match[1] === "apply") {
-        config = { view: "view-confirm", tabs: true, tab: "#/search", render: function () { confirmView.render(param); } };
       } else {
-        config = { view: "view-want-detail", tabs: true, tab: "#/search", render: function () { wantDetail.render(param); } };
+        config = { view: "view-confirm", tabs: true, tab: "#/search", render: function () { confirmView.render(param); } };
       }
     } else {
       config = ROUTES[hash];
@@ -1796,8 +1518,8 @@
     else route();
   }
 
-  // 以前のデモ版が端末に残した平文パスワードとログイン状態を消す。
-  ["yum.accounts", "yum.session"].forEach(function (key) {
+  // 以前の版が端末に残したデータ（平文パスワードを含む）を消す。
+  ["yum.accounts", "yum.session", "yum.profile", "yum.listings", "yum.applications", "yum.wants", "yum.favorites"].forEach(function (key) {
     try { window.localStorage.removeItem(key); } catch (error) { /* 消せなくても続行する */ }
   });
 
