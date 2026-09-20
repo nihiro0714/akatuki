@@ -3,7 +3,7 @@
 山口大学の学内で、不要になった物を**無償でゆずりあう**ためのサイトです。
 お金のやり取りは一切なく、価格・決済の機能はありません。
 
-公開先: <https://nihiro0714.github.io/akatuki/>
+公開先: <https://zennzai2007.github.io/akatuki/>
 
 画面はバニラの HTML/CSS/JS（ハッシュルーター）で作り、ログインとデータ保存に Supabase を使っています。
 
@@ -46,8 +46,8 @@
 1. Supabase でプロジェクトを作る
 2. SQL Editor で `supabase/schema.sql` を実行する
 3. Authentication → URL Configuration で次を設定する
-   - Site URL: `https://nihiro0714.github.io/akatuki/`
-   - Redirect URLs: `https://nihiro0714.github.io/akatuki/**` と `http://localhost:3000/**`
+   - Site URL: `https://zennzai2007.github.io/akatuki/`
+   - Redirect URLs: `https://zennzai2007.github.io/akatuki/**` と `http://localhost:3000/**`
 4. Project Settings の Project URL と anon（Publishable）key を `docs/config.js` に書く
 
 ### ローカルで開く

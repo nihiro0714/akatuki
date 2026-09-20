@@ -1,12 +1,12 @@
 # YUマーケット (akatuki)
 
-公開先: https://nihiro0714.github.io/akatuki/ （GitHub Pages、`docs/` 配下を配信）
+公開先: https://zennzai2007.github.io/akatuki/ （GitHub Pages、`docs/` 配下を配信）
 画面は `docs/app.js` のハッシュルーター（`#/login` など）で切り替えている。
 
 ## Supabase Auth を入れるときに必ず守ること
 
 ### 1. 確認メールのリンクの戻り先
-- Supabase ダッシュボードの Authentication → URL Configuration で **Site URL を `https://nihiro0714.github.io/akatuki/` にする**。既定の `http://localhost:3000` のままだと、確認メールのリンクが localhost に飛ぶ。
+- Supabase ダッシュボードの Authentication → URL Configuration で **Site URL を `https://zennzai2007.github.io/akatuki/` にする**。既定の `http://localhost:3000` のままだと、確認メールのリンクが localhost に飛ぶ。
 - 同じ URL を Redirect URLs にも入れておき、`signUp` の `options.emailRedirectTo` でも同じ URL を指定する。
 
 ### 2. ハッシュルーターとの衝突
