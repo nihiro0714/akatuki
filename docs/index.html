@@ -288,6 +288,26 @@
     <p class="empty" id="history-empty" hidden>取引履歴はありません。</p>
   </main>
 
+  <!-- メッセージ（取引中の当事者だけ） -->
+  <main class="view" id="view-chat" hidden>
+    <div class="screen-head">
+      <button type="button" class="back" data-back aria-label="戻る">←</button>
+      <h2 id="chat-title">メッセージ</h2>
+    </div>
+
+    <p class="muted" id="chat-partner"></p>
+
+    <div class="chat-list" id="chat-list"></div>
+    <p class="empty" id="chat-empty" hidden>まだメッセージはありません。受け渡しの日時や場所を相談してください。</p>
+
+    <form class="chat-form" id="chat-form">
+      <input type="text" id="chat-input" class="plain-input" maxlength="500" placeholder="メッセージを入力" autocomplete="off">
+      <button type="submit" class="mini-button">送信</button>
+    </form>
+
+    <p class="empty">やりとりは相手にだけ見えます。受け渡しが完了すると消えます。</p>
+  </main>
+
   <!-- 利用規約（ログイン前でも読める） -->
   <main class="view" id="view-terms" hidden>
     <div class="screen-head">

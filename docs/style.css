@@ -655,6 +655,33 @@ textarea.plain-input { min-height: 96px; resize: vertical; }
   box-shadow: inset 0 -2px 0 var(--text);
 }
 
+/* ---------- メッセージ ---------- */
+.chat-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 14px 0;
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.chat-message {
+  max-width: 80%;
+  background: var(--panel);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+}
+
+.chat-message.mine { align-self: flex-end; background: var(--fill); }
+
+.chat-who { margin: 0 0 2px; font-size: 11px; color: var(--muted); }
+
+.chat-body { margin: 0; font-size: 13px; white-space: pre-wrap; word-break: break-word; }
+
+.chat-form { display: flex; gap: 8px; align-items: center; }
+
+.chat-form .plain-input { flex: 1; }
+
 /* ---------- トースト ---------- */
 .toast {
   position: fixed;

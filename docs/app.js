@@ -1015,6 +1015,110 @@
   })();
 
   /* ------------------------------------------------------------------
+     メッセージ（取引中の当事者だけ）
+  ------------------------------------------------------------------ */
+  var chat = (function () {
+    var list = $("chat-list");
+    var form = $("chat-form");
+    var input = $("chat-input");
+    var current = null;
+    var timer = null;
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var body = input.value.trim();
+      if (!current || !body) return;
+
+      var button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      var result;
+      try {
+        result = await sb.from("messages").insert({
+          application_id: current.id,
+          sender_id: cache.me,
+          body: body
+        });
+      } catch (error) {
+        result = { error: error };
+      }
+      button.disabled = false;
+
+      if (result.error) {
+        toast("送信できませんでした。もう一度お試しください");
+        return;
+      }
+      input.value = "";
+      await load();
+    });
+
+    async function load() {
+      if (!current) return;
+      var result;
+      try {
+        result = await sb.from("messages").select("*")
+          .eq("application_id", current.id)
+          .order("created_at", { ascending: true });
+      } catch (error) {
+        result = { error: error };
+      }
+      if (result.error || !result.data) return;
+      draw(result.data);
+    }
+
+    function draw(messages) {
+      list.innerHTML = "";
+      messages.forEach(function (message) {
+        var row = document.createElement("div");
+        row.className = "chat-message" + (message.sender_id === cache.me ? " mine" : "");
+
+        var who = document.createElement("p");
+        who.className = "chat-who";
+        who.textContent = message.sender_id === cache.me ? "自分" : personLabel(message.sender_id);
+        row.appendChild(who);
+
+        var body = document.createElement("p");
+        body.className = "chat-body";
+        body.textContent = message.body;
+        row.appendChild(body);
+
+        list.appendChild(row);
+      });
+      $("chat-empty").hidden = messages.length > 0;
+      list.scrollTop = list.scrollHeight;
+    }
+
+    function render(id) {
+      var entry = store.applications().filter(function (item) { return item.id === id; })[0];
+      // 取引中の当事者だけが使える。RLS でも同じ条件で弾いている。
+      if (!entry || entry.status !== "取引中") {
+        go("#/transactions");
+        return;
+      }
+
+      current = entry;
+      var listing = listingOf(entry) || {};
+      var other = entry.applicant_id === cache.me ? listing.owner_id : entry.applicant_id;
+      $("chat-title").textContent = listing.name || "メッセージ";
+      $("chat-partner").textContent = personLabel(other);
+      list.innerHTML = "";
+      $("chat-empty").hidden = true;
+      input.value = "";
+
+      load();
+      // 通知の仕組みは無いので、開いている間だけ新着を取りに行く。
+      timer = window.setInterval(load, 10000);
+    }
+
+    function stop() {
+      if (timer) window.clearInterval(timer);
+      timer = null;
+      current = null;
+    }
+
+    return { render: render, stop: stop };
+  })();
+
+  /* ------------------------------------------------------------------
      取引（届いた申込・申込中・取引中・履歴）/ 出品中
   ------------------------------------------------------------------ */
   function makeEntryCard(entry, lines, actions) {
@@ -1120,7 +1224,12 @@
         "受取日　" + formatDate(entry.date),
         "受取場所　" + entry.place,
         "出品者が完了処理をすると履歴に移ります"
-      ], []);
+      ], [
+        {
+          label: "メッセージ",
+          run: function () { go("#/chat/" + entry.id); }
+        }
+      ]);
     });
   }
 
@@ -1185,6 +1294,10 @@
         "受取場所　" + entry.place
       );
       actions = [
+        {
+          label: "メッセージ",
+          run: function () { go("#/chat/" + entry.id); }
+        },
         {
           label: "受け渡し完了",
           run: function (event) {
@@ -1402,7 +1515,7 @@
 
   function route() {
     var hash = window.location.hash || "#/login";
-    var match = /^#\/(item|apply)\/(.+)$/.exec(hash);
+    var match = /^#\/(item|apply|chat)\/(.+)$/.exec(hash);
     var config;
     var param = null;
 
@@ -1410,8 +1523,10 @@
       param = match[2];
       if (match[1] === "item") {
         config = { view: "view-detail", tabs: true, tab: "#/search", render: function () { detail.render(param); } };
-      } else {
+      } else if (match[1] === "apply") {
         config = { view: "view-confirm", tabs: true, tab: "#/search", render: function () { confirmView.render(param); } };
+      } else {
+        config = { view: "view-chat", tabs: true, tab: "#/mypage", render: function () { chat.render(param); } };
       }
     } else {
       config = ROUTES[hash];
@@ -1432,6 +1547,9 @@
       go("#/home");
       return;
     }
+
+    // 画面を離れたら、メッセージの自動更新を止める。
+    chat.stop();
 
     each(document.querySelectorAll(".view"), function (view) {
       view.hidden = view.id !== config.view;
