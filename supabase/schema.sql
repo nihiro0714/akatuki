@@ -158,3 +158,7 @@ create policy "photos read" on storage.objects for select using (bucket_id = 'ph
 create policy "photos upload own" on storage.objects for insert to authenticated
   with check (bucket_id = 'photos'
     and (storage.foldername(name))[1] = (select auth.uid())::text);
+-- 出品を取り消すと行ごと削除するので、写真も消せるようにする
+create policy "photos delete own" on storage.objects for delete to authenticated
+  using (bucket_id = 'photos'
+    and (storage.foldername(name))[1] = (select auth.uid())::text);
