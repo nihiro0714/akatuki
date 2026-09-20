@@ -26,9 +26,18 @@ create table applications (
   completed_at timestamptz,
   created_at timestamptz not null default now()
 );
+-- 取引中の当事者だけのやりとり。受け渡し完了・取消のときに消す。
+create table messages (
+  id uuid primary key default gen_random_uuid(),
+  application_id uuid not null references applications(id) on delete cascade,
+  sender_id uuid not null references profiles(id) on delete cascade,
+  body text not null,
+  created_at timestamptz not null default now()
+);
 create index on listings (owner_id);
 create index on applications (listing_id);
 create index on applications (applicant_id);
+create index on messages (application_id, created_at);
 -- 同じ出品に同じ人が二重に申し込めない（取消後の再申込は可）
 create unique index one_active_application
   on applications (listing_id, applicant_id)
@@ -38,6 +47,7 @@ create unique index one_active_application
 alter table profiles enable row level security;
 alter table listings enable row level security;
 alter table applications enable row level security;
+alter table messages enable row level security;
 
 create policy "read profiles" on profiles for select to authenticated using (true);
 create policy "update own profile" on profiles for update to authenticated
@@ -65,6 +75,20 @@ create policy "update my applications" on applications for update to authenticat
 -- クライアントから直接更新できる列は date, place のみ。status は RPC 経由のみ
 revoke update on applications from anon, authenticated;
 grant update (date, place) on applications to authenticated;
+
+-- メッセージは当事者だけが読める
+create policy "read my messages" on messages for select to authenticated
+  using (exists (select 1 from applications ap join listings l on l.id = ap.listing_id
+                 where ap.id = application_id
+                   and ((select auth.uid()) = ap.applicant_id or (select auth.uid()) = l.owner_id)));
+-- 取引中のあいだだけ、当事者が自分の名前で送れる
+create policy "send message" on messages for insert to authenticated
+  with check ((select auth.uid()) = sender_id
+    and exists (select 1 from applications ap join listings l on l.id = ap.listing_id
+                where ap.id = application_id and ap.status = '取引中'
+                  and ((select auth.uid()) = ap.applicant_id or (select auth.uid()) = l.owner_id)));
+-- 送ったあとの書き換え・削除はさせない（完了・取消のときに関数側で消す）
+revoke update, delete on messages from anon, authenticated;
 
 -- ========== 登録時: ドメイン制限 + profiles 自動作成 ==========
 create or replace function public.on_auth_user_created() returns trigger
@@ -105,6 +129,7 @@ begin
   if not found or oid <> (select auth.uid()) then raise exception 'not allowed'; end if;
   update public.applications set status = '取引完了', completed_at = now() where id = app_id;
   update public.listings set status = 'done' where id = lid;
+  delete from public.messages where application_id = app_id;
 end $$;
 
 -- ========== RPC: 取消（当事者のどちらか） ==========
@@ -122,6 +147,7 @@ begin
   if st = '取引中' then
     update public.listings set status = 'open' where id = lid;
   end if;
+  delete from public.messages where application_id = app_id;
 end $$;
 
 revoke execute on function public.approve_application(uuid) from public, anon;
