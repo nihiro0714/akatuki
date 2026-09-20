@@ -50,7 +50,7 @@ create policy "own listings" on listings for all to authenticated
 create policy "read my applications" on applications for select to authenticated
   using ((select auth.uid()) = applicant_id
       or (select auth.uid()) = (select owner_id from listings where id = listing_id));
--- status は '申込中' でしか作れない（承認前に counterpart_email で連絡先を取られないように）
+-- status は '申込中' でしか作れない（承認を経ずに取引中の申込を作らせない）
 create policy "apply" on applications for insert to authenticated
   with check ((select auth.uid()) = applicant_id
       and status = '申込中' and completed_at is null
@@ -78,25 +78,6 @@ begin
 end $$;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.on_auth_user_created();
-
--- ========== RPC: 相手の連絡先（当事者かつ取引中/完了のときだけ） ==========
-create or replace function public.counterpart_email(app_id uuid)
-returns text language plpgsql security definer set search_path = '' as $$
-declare a record; me uuid := (select auth.uid()); result text;
-begin
-  select ap.applicant_id, l.owner_id, ap.status into a
-  from public.applications ap join public.listings l on l.id = ap.listing_id
-  where ap.id = app_id;
-  if not found or a.status not in ('取引中', '取引完了') then return null; end if;
-  if me = a.owner_id then
-    select email into result from auth.users where id = a.applicant_id;
-  elsif me = a.applicant_id then
-    select email into result from auth.users where id = a.owner_id;
-  else
-    return null;
-  end if;
-  return result;
-end $$;
 
 -- ========== RPC: 承認（出品者のみ） ==========
 create or replace function public.approve_application(app_id uuid)
@@ -143,11 +124,9 @@ begin
   end if;
 end $$;
 
-revoke execute on function public.counterpart_email(uuid) from public, anon;
 revoke execute on function public.approve_application(uuid) from public, anon;
 revoke execute on function public.complete_application(uuid) from public, anon;
 revoke execute on function public.cancel_application(uuid) from public, anon;
-grant execute on function public.counterpart_email(uuid) to authenticated;
 grant execute on function public.approve_application(uuid) to authenticated;
 grant execute on function public.complete_application(uuid) to authenticated;
 grant execute on function public.cancel_application(uuid) to authenticated;
