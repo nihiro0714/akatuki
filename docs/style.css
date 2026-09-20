@@ -633,7 +633,9 @@ textarea.plain-input { min-height: 96px; resize: vertical; }
   max-width: 480px;
   height: var(--tabbar-height);
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  /* タブの数が変わっても等分になるようにする。 */
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   background: #ffffff;
   border-top: 1px solid var(--line);
   z-index: 10;
