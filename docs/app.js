@@ -224,35 +224,7 @@
     cache.profiles = {};
     cache.listings = [];
     cache.applications = [];
-    contacts = {};
     go("#/login");
-  }
-
-  // 取引相手のメールアドレス。当事者で取引中・取引完了のときだけ RPC が返す。
-  var contacts = {};
-
-  function contactOf(applicationId) {
-    if (!contacts[applicationId]) {
-      contacts[applicationId] = sb.rpc("counterpart_email", { app_id: applicationId }).then(function (result) {
-        if (result.error || !result.data) {
-          delete contacts[applicationId];
-          if (result.error) throw result.error;
-        }
-        return result.data;
-      });
-    }
-    return contacts[applicationId];
-  }
-
-  // カードの index 行目（0 始まり）に連絡先を後から書き込む。
-  function fillContact(card, index, applicationId) {
-    var line = card.querySelectorAll(".body p")[index];
-    line.textContent = "連絡先　読み込み中…";
-    contactOf(applicationId).then(function (email) {
-      line.textContent = "連絡先　" + (email || "表示できません");
-    }, function () {
-      line.textContent = "連絡先　読み込めませんでした";
-    });
   }
 
   var store = {
@@ -1144,14 +1116,11 @@
 
   function renderDeals() {
     renderEntryList("deals-list", "deals-empty", applicationsBy("取引中"), function (entry) {
-      var card = applicationCard(entry, [
+      return applicationCard(entry, [
         "受取日　" + formatDate(entry.date),
         "受取場所　" + entry.place,
-        "連絡先",
         "出品者が完了処理をすると履歴に移ります"
       ], []);
-      fillContact(card, 3, entry.id);
-      return card;
     });
   }
 
@@ -1199,7 +1168,7 @@
           run: function (event) {
             changeApplication("approve_application", entry, event.currentTarget,
               "承認すると、この出品へのほかの申込は自動で取り消されます。承認しますか？",
-              "承認しました。相手の連絡先が表示されます", renderTransactions);
+              "承認しました", renderTransactions);
           }
         },
         {
@@ -1213,8 +1182,7 @@
     } else {
       lines.push(
         "受取日　" + formatDate(entry.date),
-        "受取場所　" + entry.place,
-        "連絡先"
+        "受取場所　" + entry.place
       );
       actions = [
         {
@@ -1234,9 +1202,7 @@
       ];
     }
 
-    var card = makeEntryCard(Object.assign({}, entry, { photo_url: listing.photo_url }), lines, actions);
-    if (entry.status === "取引中") fillContact(card, 4, entry.id);
-    return card;
+    return makeEntryCard(Object.assign({}, entry, { photo_url: listing.photo_url }), lines, actions);
   }
 
   function renderListings() {
