@@ -760,7 +760,37 @@
   ------------------------------------------------------------------ */
   var REPORT_REASONS = ["販売・金銭の要求", "不適切な写真や内容", "連絡が取れない", "迷惑な行為", "その他"];
 
-  // getTarget() は { reportedId, listingId, listingName } を返す。
+  // 通報されたあとに出品や取引が消えても確認できるよう、通報時点の内容をコピーして残す。
+  function listingSnapshot(listing) {
+    if (!listing) return "";
+    return [
+      "商品名: " + (listing.name || ""),
+      "カテゴリー: " + (listing.category || ""),
+      "状態: " + (listing.condition || ""),
+      "受け渡し: " + [listing.period, listing.pickup, listing.campus].filter(Boolean).join(" / "),
+      "説明: " + (listing.description || ""),
+      "写真: " + (listing.photo_url || "なし")
+    ].join("\n");
+  }
+
+  async function messagesSnapshot(applicationId) {
+    if (!applicationId) return "";
+    var result;
+    try {
+      result = await sb.from("messages").select("*")
+        .eq("application_id", applicationId)
+        .order("created_at", { ascending: true });
+    } catch (error) {
+      return "";
+    }
+    if (result.error || !result.data) return "";
+    return result.data.map(function (message) {
+      var who = cache.profiles[message.sender_id] || {};
+      return "[" + dateOf(message.created_at) + "] " + (who.name || "名前未設定") + ": " + message.body;
+    }).join("\n");
+  }
+
+  // getTarget() は { reportedId, listingId, listingName, listing, applicationId } を返す。
   function attachReport(prefix, getTarget) {
     var open = $(prefix + "-report-open");
     var form = $(prefix + "-report-form");
@@ -795,6 +825,8 @@
           reported_id: target.reportedId,
           listing_id: target.listingId || null,
           listing_name: target.listingName || "",
+          listing_detail: listingSnapshot(target.listing),
+          messages_snapshot: await messagesSnapshot(target.applicationId),
           reason: reason.value,
           note: note.value.trim()
         });
@@ -833,7 +865,12 @@
 
     var report = attachReport("detail", function () {
       if (!current) return null;
-      return { reportedId: current.owner_id, listingId: current.id, listingName: current.name };
+      return {
+        reportedId: current.owner_id,
+        listingId: current.id,
+        listingName: current.name,
+        listing: current
+      };
     });
 
     function render(id) {
@@ -1103,7 +1140,13 @@
       if (!current) return null;
       var listing = listingOf(current) || {};
       var other = current.applicant_id === cache.me ? listing.owner_id : current.applicant_id;
-      return { reportedId: other, listingId: listing.id, listingName: listing.name || "" };
+      return {
+        reportedId: other,
+        listingId: listing.id,
+        listingName: listing.name || "",
+        listing: listing,
+        applicationId: current.id
+      };
     });
 
     form.addEventListener("submit", async function (event) {
