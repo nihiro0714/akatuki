@@ -898,12 +898,14 @@
       });
       var mine = item.owner_id === cache.me;
       var closed = item.status !== "open";
+      var stopped = blocked();
 
       var button = $("detail-apply");
       var note = $("detail-note");
-      button.disabled = applied || mine || closed;
-      note.hidden = !(applied || mine || closed);
-      if (mine) note.textContent = "自分の出品です";
+      button.disabled = applied || mine || closed || stopped;
+      note.hidden = !(applied || mine || closed || stopped);
+      if (stopped) note.textContent = "利用が停止されています。運営者にお問い合わせください";
+      else if (mine) note.textContent = "自分の出品です";
       else if (closed) note.textContent = "この商品の受付は終了しました";
       else if (applied) note.textContent = "この商品はすでに申し込み済みです";
 
@@ -963,6 +965,11 @@
         : setError(null, $("confirm-agree-error"), "利用規約への同意が必要です");
 
       if (!okDate || !okPlace || !okMessage || !okAgree) return;
+
+      if (blocked()) {
+        toast("利用が停止されているため申し込めません");
+        return;
+      }
 
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;
@@ -1024,7 +1031,12 @@
   /* ------------------------------------------------------------------
      出品
   ------------------------------------------------------------------ */
-  (function sell() {
+  // 利用停止中は出品・申込・メッセージができない。DB 側のポリシーでも弾いている。
+  function blocked() {
+    return Boolean(store.profile().blocked);
+  }
+
+  var sell = (function () {
     var form = $("sell-form");
     var name = $("sell-name");
     var description = $("sell-description");
@@ -1083,7 +1095,19 @@
         ok = false;
       }
 
+      if (!$("sell-agree").checked) {
+        setError(null, $("sell-agree-error"), "出してはいけないものに当たらないか確認してください");
+        ok = false;
+      } else {
+        setError(null, $("sell-agree-error"), "");
+      }
+
       if (!ok) return;
+
+      if (blocked()) {
+        toast("利用が停止されているため出品できません");
+        return;
+      }
 
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;
@@ -1115,6 +1139,12 @@
       go("#/listings");
     });
 
+    function render() {
+      var stopped = blocked();
+      $("sell-blocked").hidden = !stopped;
+      form.querySelector('[type="submit"]').disabled = stopped;
+    }
+
     function reset() {
       form.reset();
       showPhoto(null);
@@ -1123,7 +1153,7 @@
       $("sell-photo-error").textContent = "";
     }
 
-    return {};
+    return { render: render };
   })();
 
   /* ------------------------------------------------------------------
@@ -1153,6 +1183,11 @@
       event.preventDefault();
       var body = input.value.trim();
       if (!current || !body) return;
+
+      if (blocked()) {
+        toast("利用が停止されているため送信できません");
+        return;
+      }
 
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;
@@ -1632,7 +1667,7 @@
     "#/home": { view: "view-home", tabs: true, tab: "#/home", render: function () { home.render(); } },
     "#/search": { view: "view-search", tabs: true, tab: "#/search", render: function () { search.render(); } },
     "#/results": { view: "view-results", tabs: true, tab: "#/search", render: function () { results.render(); } },
-    "#/sell": { view: "view-sell", tabs: true, tab: "#/sell" },
+    "#/sell": { view: "view-sell", tabs: true, tab: "#/sell", render: function () { sell.render(); } },
     "#/terms": { view: "view-terms", tabs: true, tab: "#/mypage", auth: "any" },
     "#/transactions": { view: "view-transactions", tabs: true, tab: "#/mypage", render: renderTransactions },
     "#/listings": { view: "view-listings", tabs: true, tab: "#/mypage", render: renderListings },
