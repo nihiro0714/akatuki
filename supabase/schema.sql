@@ -34,10 +34,24 @@ create table messages (
   body text not null,
   created_at timestamptz not null default now()
 );
+-- 通報。運営者がダッシュボードで確認する。通報時点の出品内容とやりとりのコピーも残す。
+create table reports (
+  id uuid primary key default gen_random_uuid(),
+  reporter_id uuid not null references profiles(id) on delete cascade,
+  reported_id uuid not null references profiles(id) on delete cascade,
+  listing_id uuid references listings(id) on delete set null,
+  listing_name text not null default '',
+  listing_detail text not null default '',
+  messages_snapshot text not null default '',
+  reason text not null,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
 create index on listings (owner_id);
 create index on applications (listing_id);
 create index on applications (applicant_id);
 create index on messages (application_id, created_at);
+create index on reports (created_at desc);
 -- 同じ出品に同じ人が二重に申し込めない（取消後の再申込は可）
 create unique index one_active_application
   on applications (listing_id, applicant_id)
@@ -48,6 +62,7 @@ alter table profiles enable row level security;
 alter table listings enable row level security;
 alter table applications enable row level security;
 alter table messages enable row level security;
+alter table reports enable row level security;
 
 create policy "read profiles" on profiles for select to authenticated using (true);
 create policy "update own profile" on profiles for update to authenticated
@@ -89,6 +104,13 @@ create policy "send message" on messages for insert to authenticated
                   and ((select auth.uid()) = ap.applicant_id or (select auth.uid()) = l.owner_id)));
 -- 送ったあとの書き換え・削除はさせない（完了・取消のときに関数側で消す）
 revoke update, delete on messages from anon, authenticated;
+
+-- 通報は送れるだけ。自分の名前でだけ送れ、自分自身は通報できない
+create policy "send report" on reports for insert to authenticated
+  with check ((select auth.uid()) = reporter_id
+    and reported_id <> (select auth.uid()));
+-- select ポリシーを作らないので、アプリからは誰も読めない（ダッシュボードで確認する）
+revoke update, delete on reports from anon, authenticated;
 
 -- ========== 登録時: ドメイン制限 + profiles 自動作成 ==========
 create or replace function public.on_auth_user_created() returns trigger
