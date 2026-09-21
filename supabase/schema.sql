@@ -6,6 +6,8 @@ create table profiles (
   id uuid primary key references auth.users on delete cascade,
   name text not null default '', faculty text not null default '', campus text not null default '',
   photo_url text,
+  -- 問題のある利用者を止める。ダッシュボードで true にすると出品・申込・メッセージができなくなる。
+  blocked boolean not null default false,
   created_at timestamptz not null default now()
 );
 create table listings (
@@ -57,6 +59,14 @@ create unique index one_active_application
   on applications (listing_id, applicant_id)
   where status in ('申込中', '取引中');
 
+-- ========== 利用停止の判定 ==========
+create or replace function public.is_blocked() returns boolean
+language sql security definer set search_path = '' stable as $$
+  select coalesce((select blocked from public.profiles where id = (select auth.uid())), false);
+$$;
+revoke execute on function public.is_blocked() from public, anon;
+grant execute on function public.is_blocked() to authenticated;
+
 -- ========== RLS ==========
 alter table profiles enable row level security;
 alter table listings enable row level security;
@@ -70,7 +80,8 @@ create policy "update own profile" on profiles for update to authenticated
 
 create policy "read listings" on listings for select to authenticated using (true);
 create policy "own listings" on listings for all to authenticated
-  using ((select auth.uid()) = owner_id) with check ((select auth.uid()) = owner_id);
+  using ((select auth.uid()) = owner_id)
+  with check ((select auth.uid()) = owner_id and not public.is_blocked());
 
 create policy "read my applications" on applications for select to authenticated
   using ((select auth.uid()) = applicant_id
@@ -79,6 +90,7 @@ create policy "read my applications" on applications for select to authenticated
 create policy "apply" on applications for insert to authenticated
   with check ((select auth.uid()) = applicant_id
       and status = '申込中' and completed_at is null
+      and not public.is_blocked()
       and exists (select 1 from listings l
                   where l.id = listing_id and l.status = 'open'
                     and l.owner_id <> (select auth.uid())));
@@ -99,6 +111,7 @@ create policy "read my messages" on messages for select to authenticated
 -- 取引中のあいだだけ、当事者が自分の名前で送れる
 create policy "send message" on messages for insert to authenticated
   with check ((select auth.uid()) = sender_id
+    and not public.is_blocked()
     and exists (select 1 from applications ap join listings l on l.id = ap.listing_id
                 where ap.id = application_id and ap.status = '取引中'
                   and ((select auth.uid()) = ap.applicant_id or (select auth.uid()) = l.owner_id)));
