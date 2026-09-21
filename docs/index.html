@@ -137,6 +137,18 @@
       <button type="button" class="block-button" id="detail-apply">申し込む</button>
     </div>
     <p class="note" id="detail-note" hidden></p>
+
+    <div class="report" id="detail-report">
+      <button type="button" class="linkish" id="detail-report-open">この出品を通報する</button>
+      <form class="report-form" id="detail-report-form" hidden>
+        <select id="detail-report-reason" aria-label="通報の理由"></select>
+        <textarea id="detail-report-note" class="plain-input" rows="3" maxlength="500" placeholder="補足（任意）"></textarea>
+        <div class="report-actions">
+          <button type="submit" class="mini-button">通報する</button>
+          <button type="button" class="mini-button" id="detail-report-cancel">やめる</button>
+        </div>
+      </form>
+    </div>
   </main>
 
   <!-- 申込確認 -->
@@ -306,6 +318,18 @@
     </form>
 
     <p class="empty">やりとりは相手にだけ見えます。受け渡しが完了すると消えます。</p>
+
+    <div class="report" id="chat-report">
+      <button type="button" class="linkish" id="chat-report-open">相手を通報する</button>
+      <form class="report-form" id="chat-report-form" hidden>
+        <select id="chat-report-reason" aria-label="通報の理由"></select>
+        <textarea id="chat-report-note" class="plain-input" rows="3" maxlength="500" placeholder="補足（任意）"></textarea>
+        <div class="report-actions">
+          <button type="submit" class="mini-button">通報する</button>
+          <button type="button" class="mini-button" id="chat-report-cancel">やめる</button>
+        </div>
+      </form>
+    </div>
   </main>
 
   <!-- 利用規約（ログイン前でも読める） -->

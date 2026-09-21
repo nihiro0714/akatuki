@@ -756,6 +756,72 @@
   })();
 
   /* ------------------------------------------------------------------
+     通報（送るだけ。DB でも読み取りは許可せず、運営者がダッシュボードで見る）
+  ------------------------------------------------------------------ */
+  var REPORT_REASONS = ["販売・金銭の要求", "不適切な写真や内容", "連絡が取れない", "迷惑な行為", "その他"];
+
+  // getTarget() は { reportedId, listingId, listingName } を返す。
+  function attachReport(prefix, getTarget) {
+    var open = $(prefix + "-report-open");
+    var form = $(prefix + "-report-form");
+    var reason = $(prefix + "-report-reason");
+    var note = $(prefix + "-report-note");
+
+    REPORT_REASONS.forEach(function (value) {
+      var option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      reason.appendChild(option);
+    });
+
+    open.addEventListener("click", function () {
+      form.hidden = false;
+      open.hidden = true;
+    });
+
+    $(prefix + "-report-cancel").addEventListener("click", close);
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+      var target = getTarget();
+      if (!target || !target.reportedId) return;
+
+      var button = form.querySelector('[type="submit"]');
+      button.disabled = true;
+      var result;
+      try {
+        result = await sb.from("reports").insert({
+          reporter_id: cache.me,
+          reported_id: target.reportedId,
+          listing_id: target.listingId || null,
+          listing_name: target.listingName || "",
+          reason: reason.value,
+          note: note.value.trim()
+        });
+      } catch (error) {
+        result = { error: error };
+      }
+      button.disabled = false;
+
+      if (result.error) {
+        toast("通報できませんでした。もう一度お試しください");
+        return;
+      }
+      close();
+      toast("通報しました。確認します");
+    });
+
+    function close() {
+      form.hidden = true;
+      open.hidden = false;
+      note.value = "";
+      reason.selectedIndex = 0;
+    }
+
+    return { close: close };
+  }
+
+  /* ------------------------------------------------------------------
      商品詳細
   ------------------------------------------------------------------ */
   var detail = (function () {
@@ -763,6 +829,11 @@
 
     $("detail-apply").addEventListener("click", function () {
       if (current) go("#/apply/" + current.id);
+    });
+
+    var report = attachReport("detail", function () {
+      if (!current) return null;
+      return { reportedId: current.owner_id, listingId: current.id, listingName: current.name };
     });
 
     function render(id) {
@@ -798,6 +869,10 @@
       if (mine) note.textContent = "自分の出品です";
       else if (closed) note.textContent = "この商品の受付は終了しました";
       else if (applied) note.textContent = "この商品はすでに申し込み済みです";
+
+      // 自分の出品は通報できない。
+      report.close();
+      $("detail-report").hidden = mine;
     }
 
     return { render: render };
@@ -1024,6 +1099,13 @@
     var current = null;
     var timer = null;
 
+    var report = attachReport("chat", function () {
+      if (!current) return null;
+      var listing = listingOf(current) || {};
+      var other = current.applicant_id === cache.me ? listing.owner_id : current.applicant_id;
+      return { reportedId: other, listingId: listing.id, listingName: listing.name || "" };
+    });
+
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
       var body = input.value.trim();
@@ -1103,6 +1185,7 @@
       list.innerHTML = "";
       $("chat-empty").hidden = true;
       input.value = "";
+      report.close();
 
       load();
       // 通知の仕組みは無いので、開いている間だけ新着を取りに行く。

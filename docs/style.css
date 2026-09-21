@@ -655,6 +655,21 @@ textarea.plain-input { min-height: 96px; resize: vertical; }
   box-shadow: inset 0 -2px 0 var(--text);
 }
 
+/* ---------- 通報 ---------- */
+.report { margin-top: 24px; text-align: center; }
+
+.report .linkish { color: var(--muted); text-decoration: underline; }
+
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  text-align: left;
+}
+
+.report-actions { display: flex; gap: 8px; justify-content: center; }
+
 /* ---------- メッセージ ---------- */
 .chat-list {
   display: flex;
