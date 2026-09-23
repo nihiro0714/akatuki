@@ -791,7 +791,7 @@
   }
 
   // getTarget() は { reportedId, listingId, listingName, listing, applicationId } を返す。
-  function attachReport(prefix, getTarget) {
+  function attachReport(prefix, getTarget, onSent) {
     var open = $(prefix + "-report-open");
     var form = $(prefix + "-report-form");
     var reason = $(prefix + "-report-reason");
@@ -825,6 +825,7 @@
           reported_id: target.reportedId,
           listing_id: target.listingId || null,
           listing_name: target.listingName || "",
+          application_id: target.applicationId || null,
           listing_detail: listingSnapshot(target.listing),
           messages_snapshot: await messagesSnapshot(target.applicationId),
           reason: reason.value,
@@ -840,6 +841,7 @@
         return;
       }
       close();
+      if (onSent) onSent();
       toast("通報しました。確認します");
     });
 
@@ -1177,7 +1179,26 @@
         listing: listing,
         applicationId: current.id
       };
+    }, function () {
+      // 通報したらこの取引のメッセージは止まる。
+      setLocked(true);
     });
+
+    // 通報されているかは reports を読めないので RPC で聞く。
+    async function checkLocked(applicationId) {
+      var result;
+      try {
+        result = await sb.rpc("trade_reported", { app_id: applicationId });
+      } catch (error) {
+        return;
+      }
+      if (!result.error && result.data && current && current.id === applicationId) setLocked(true);
+    }
+
+    function setLocked(locked) {
+      form.hidden = locked;
+      $("chat-locked").hidden = !locked;
+    }
 
     form.addEventListener("submit", async function (event) {
       event.preventDefault();
@@ -1204,7 +1225,13 @@
       button.disabled = false;
 
       if (result.error) {
-        toast("送信できませんでした。もう一度お試しください");
+        // 通報された取引では DB 側が拒否する。
+        if (result.error.code === "42501") {
+          setLocked(true);
+          toast("この取引は通報されたため、メッセージを送れません");
+        } else {
+          toast("送信できませんでした。もう一度お試しください");
+        }
         return;
       }
       input.value = "";
@@ -1264,10 +1291,15 @@
       $("chat-empty").hidden = true;
       input.value = "";
       report.close();
+      setLocked(false);
+      checkLocked(entry.id);
 
       load();
-      // 通知の仕組みは無いので、開いている間だけ新着を取りに行く。
-      timer = window.setInterval(load, 10000);
+      // 通知の仕組みは無いので、開いている間だけ新着と通報の有無を取りに行く。
+      timer = window.setInterval(function () {
+        load();
+        if (current) checkLocked(current.id);
+      }, 10000);
     }
 
     function stop() {
