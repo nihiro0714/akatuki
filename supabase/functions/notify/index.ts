@@ -2,16 +2,18 @@
 // INSERT / UPDATE）から呼ばれる。外部ライブラリは使わず、REST API を fetch で叩く。
 //
 // 必要な環境変数（Edge Functions の Secrets に設定する）:
-//   BREVO_API_KEY   Brevo の API キー
-//   SENDER_EMAIL    Brevo で認証した送信元アドレス
-//   SENDER_NAME     差出人の表示名（省略時は YUマーケット）
-//   SITE_URL        サイトの URL（省略時は公開先）
-//   WEBHOOK_SECRET  Webhook のヘッダーと突き合わせる合言葉
+//   MAILJET_API_KEY     Mailjet の API キー
+//   MAILJET_SECRET_KEY  Mailjet のシークレットキー
+//   SENDER_EMAIL        Mailjet で認証した送信元アドレス
+//   SENDER_NAME         差出人の表示名（省略時は YUマーケット）
+//   SITE_URL            サイトの URL（省略時は公開先）
+//   WEBHOOK_SECRET      Webhook のヘッダーと突き合わせる合言葉
 // SUPABASE_URL と SUPABASE_SERVICE_ROLE_KEY は Supabase が自動で入れる。
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const BREVO_API_KEY = Deno.env.get("BREVO_API_KEY")!;
+const MAILJET_API_KEY = Deno.env.get("MAILJET_API_KEY")!;
+const MAILJET_SECRET_KEY = Deno.env.get("MAILJET_SECRET_KEY")!;
 const SENDER_EMAIL = Deno.env.get("SENDER_EMAIL")!;
 const SENDER_NAME = Deno.env.get("SENDER_NAME") ?? "YUマーケット";
 const SITE_URL = Deno.env.get("SITE_URL") ?? "https://zennzai2007.github.io/akatuki/";
@@ -36,17 +38,20 @@ async function listingOf(listingId: string) {
 }
 
 async function send(to: string, subject: string, text: string) {
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+  const auth = btoa(`${MAILJET_API_KEY}:${MAILJET_SECRET_KEY}`);
+  const response = await fetch("https://api.mailjet.com/v3.1/send", {
     method: "POST",
-    headers: { "api-key": BREVO_API_KEY, "content-type": "application/json" },
+    headers: { Authorization: `Basic ${auth}`, "content-type": "application/json" },
     body: JSON.stringify({
-      sender: { name: SENDER_NAME, email: SENDER_EMAIL },
-      to: [{ email: to }],
-      subject,
-      textContent: text,
+      Messages: [{
+        From: { Email: SENDER_EMAIL, Name: SENDER_NAME },
+        To: [{ Email: to }],
+        Subject: subject,
+        TextPart: text,
+      }],
     }),
   });
-  if (!response.ok) throw new Error(`brevo: ${response.status} ${await response.text()}`);
+  if (!response.ok) throw new Error(`mailjet: ${response.status} ${await response.text()}`);
 }
 
 const footer = `\n\nサイト: ${SITE_URL}\nこのメールは送信専用です。返信しても届きません。`;

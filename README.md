@@ -56,11 +56,12 @@
 
 申し込みが届いたときに出品者へ、承認されたときに申込者へメールを送れます。使わない場合は設定不要です（サイトは通知なしで動きます）。
 
-1. **Brevo** に登録し、送信元にするメールアドレスを認証する（Senders → Add a sender）。SMTP & API → API keys で v3 の API キーを作る。
+1. **Mailjet** に登録し、送信元にするメールアドレスを認証する（Account settings → Sender domains & addresses → Add a sender address）。同じ画面の API Key Management で、API キーとシークレットキーを控える。
 2. Supabase の **Edge Functions** で `notify` という名前の関数を作り、`supabase/functions/notify/index.ts` の内容を貼ってデプロイする。
 3. Edge Functions の **Secrets** に次を登録する。
-   - `BREVO_API_KEY`（Brevo の API キー）
-   - `SENDER_EMAIL`（Brevo で認証した送信元アドレス）
+   - `MAILJET_API_KEY`（Mailjet の API キー）
+   - `MAILJET_SECRET_KEY`（Mailjet のシークレットキー）
+   - `SENDER_EMAIL`（Mailjet で認証した送信元アドレス）
    - `SENDER_NAME`（差出人名。例: YUマーケット）
    - `SITE_URL`（`https://zennzai2007.github.io/akatuki/`）
    - `WEBHOOK_SECRET`（自分で決める合言葉）
