@@ -191,13 +191,15 @@
   ------------------------------------------------------------------ */
   // Supabase から読んだデータをメモリに持つ。描画は同期のまま cache を読み、
   // ログイン直後と書き込みの後に refresh() で入れ直す。
-  var cache = { me: null, profiles: {}, listings: [], applications: [] };
+  var cache = { me: null, profiles: {}, listings: [], applications: [], ratings: [] };
 
   function refresh() {
     return Promise.all([
       sb.from("profiles").select("*"),
       sb.from("listings").select("*").order("created_at", { ascending: false }),
-      sb.from("applications").select("*").order("created_at", { ascending: false })
+      sb.from("applications").select("*").order("created_at", { ascending: false }),
+      // RLS で自分が付けた評価だけが返る（他人の評価は件数だけ RPC で見る）。
+      sb.from("ratings").select("*")
     ]).then(function (results) {
       results.forEach(function (result) {
         if (result.error) throw result.error;
@@ -206,7 +208,32 @@
       results[0].data.forEach(function (row) { cache.profiles[row.id] = row; });
       cache.listings = results[1].data;
       cache.applications = results[2].data;
+      cache.ratings = results[3].data;
     });
+  }
+
+  // 評価の合計はほかの人の分も見えないといけないので、RPC で件数だけもらう。
+  async function showRating(elementId, userId) {
+    var element = $(elementId);
+    element.textContent = "読み込み中…";
+    var result;
+    try {
+      result = await sb.rpc("rating_summary", { user_id: userId });
+    } catch (error) {
+      result = { error: error };
+    }
+    if (result.error || !result.data) {
+      element.textContent = "読み込めませんでした";
+      return;
+    }
+    var total = result.data.total || 0;
+    element.textContent = total
+      ? "よかった " + (result.data.good || 0) + " / " + total + "件"
+      : "まだ評価はありません";
+  }
+
+  function myRatingOf(applicationId) {
+    return cache.ratings.filter(function (item) { return item.application_id === applicationId; })[0] || null;
   }
 
   // 読み込みに失敗してもログイン状態は保ち、再読み込みで取り直せるようにする。
@@ -224,6 +251,7 @@
     cache.profiles = {};
     cache.listings = [];
     cache.applications = [];
+    cache.ratings = [];
     go("#/login");
   }
 
@@ -899,6 +927,7 @@
       $("detail-campus").textContent = item.campus;
 
       $("detail-owner").textContent = personLabel(item.owner_id);
+      showRating("detail-owner-rating", item.owner_id);
 
       var applied = store.applications().some(function (entry) {
         return entry.listing_id === item.id && entry.applicant_id === cache.me
@@ -1432,12 +1461,58 @@
     });
   }
 
+  // 受け取った人だけが、取引ごとに1回、出品者を評価できる。
+  async function rate(entry, good, button) {
+    button.disabled = true;
+    var listing = listingOf(entry) || {};
+    var result;
+    try {
+      result = await sb.from("ratings").insert({
+        application_id: entry.id,
+        rater_id: cache.me,
+        rated_id: listing.owner_id,
+        good: good
+      });
+    } catch (error) {
+      result = { error: error };
+    }
+    if (result.error) {
+      button.disabled = false;
+      toast("評価できませんでした。もう一度お試しください");
+      return;
+    }
+    try { await refresh(); } catch (error) { /* 次の読み込みで反映される */ }
+    toast("評価しました");
+    renderTransactions();
+  }
+
   function renderHistory() {
     renderEntryList("history-list", "history-empty", historyApplications(), function (entry) {
-      return applicationCard(entry, [
+      var mine = entry.applicant_id === cache.me;
+      var rating = myRatingOf(entry.id);
+      var lines = [
         "取引完了日　" + formatDate(dateOf(entry.completed_at || entry.created_at)),
-        entry.applicant_id === cache.me ? "ゆずってもらいました" : "ゆずりました"
-      ], []);
+        mine ? "ゆずってもらいました" : "ゆずりました"
+      ];
+      var actions = [];
+
+      if (mine && rating) {
+        lines.push("評価　" + (rating.good ? "よかった" : "困った"));
+      } else if (mine) {
+        lines.push("出品者はどうでしたか？");
+        actions = [
+          {
+            label: "よかった",
+            run: function (event) { rate(entry, true, event.currentTarget); }
+          },
+          {
+            label: "困った",
+            run: function (event) { rate(entry, false, event.currentTarget); }
+          }
+        ];
+      }
+
+      return applicationCard(entry, lines, actions);
     });
   }
 
@@ -1680,6 +1755,7 @@
       $("mypage-name").textContent = profile.name || "名前未設定";
       $("mypage-faculty").textContent = profile.faculty;
       $("mypage-campus").textContent = profile.campus ? profile.campus + "キャンパス" : "";
+      showRating("mypage-rating", cache.me);
       setEditing(false);
       renderBadges();
     }
