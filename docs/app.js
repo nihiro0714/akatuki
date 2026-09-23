@@ -791,7 +791,7 @@
   }
 
   // getTarget() は { reportedId, listingId, listingName, listing, applicationId } を返す。
-  function attachReport(prefix, getTarget, onSent) {
+  function attachReport(prefix, getTarget, onSent, question) {
     var open = $(prefix + "-report-open");
     var form = $(prefix + "-report-form");
     var reason = $(prefix + "-report-reason");
@@ -815,6 +815,7 @@
       event.preventDefault();
       var target = getTarget();
       if (!target || !target.reportedId) return;
+      if (question && !window.confirm(question)) return;
 
       var button = form.querySelector('[type="submit"]');
       button.disabled = true;
@@ -1182,7 +1183,7 @@
     }, function () {
       // 通報したらこの取引のメッセージは止まる。
       setLocked(true);
-    });
+    }, "通報すると、この取引ではどちらもメッセージを送れなくなります。通報しますか？");
 
     // 通報されているかは reports を読めないので RPC で聞く。
     async function checkLocked(applicationId) {

@@ -42,6 +42,8 @@ create table reports (
   reporter_id uuid not null references profiles(id) on delete cascade,
   reported_id uuid not null references profiles(id) on delete cascade,
   listing_id uuid references listings(id) on delete set null,
+  -- 取引についての通報。この取引ではメッセージを送れなくなる。
+  application_id uuid references applications(id) on delete set null,
   listing_name text not null default '',
   listing_detail text not null default '',
   messages_snapshot text not null default '',
@@ -66,6 +68,14 @@ language sql security definer set search_path = '' stable as $$
 $$;
 revoke execute on function public.is_blocked() from public, anon;
 grant execute on function public.is_blocked() to authenticated;
+
+-- 通報された取引かどうか（reports は誰も読めないので関数で判定する）
+create or replace function public.trade_reported(app_id uuid) returns boolean
+language sql security definer set search_path = '' stable as $$
+  select exists (select 1 from public.reports where application_id = app_id);
+$$;
+revoke execute on function public.trade_reported(uuid) from public, anon;
+grant execute on function public.trade_reported(uuid) to authenticated;
 
 -- ========== RLS ==========
 alter table profiles enable row level security;
@@ -112,6 +122,7 @@ create policy "read my messages" on messages for select to authenticated
 create policy "send message" on messages for insert to authenticated
   with check ((select auth.uid()) = sender_id
     and not public.is_blocked()
+    and not public.trade_reported(application_id)
     and exists (select 1 from applications ap join listings l on l.id = ap.listing_id
                 where ap.id = application_id and ap.status = '取引中'
                   and ((select auth.uid()) = ap.applicant_id or (select auth.uid()) = l.owner_id)));
