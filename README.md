@@ -52,6 +52,22 @@
    - Redirect URLs: `https://zennzai2007.github.io/akatuki/**` と `http://localhost:3000/**`
 4. Project Settings の Project URL と anon（Publishable）key を `docs/config.js` に書く
 
+### メール通知の準備（任意）
+
+申し込みが届いたときに出品者へ、承認されたときに申込者へメールを送れます。使わない場合は設定不要です（サイトは通知なしで動きます）。
+
+1. **Brevo** に登録し、送信元にするメールアドレスを認証する（Senders → Add a sender）。SMTP & API → API keys で v3 の API キーを作る。
+2. Supabase の **Edge Functions** で `notify` という名前の関数を作り、`supabase/functions/notify/index.ts` の内容を貼ってデプロイする。
+3. Edge Functions の **Secrets** に次を登録する。
+   - `BREVO_API_KEY`（Brevo の API キー）
+   - `SENDER_EMAIL`（Brevo で認証した送信元アドレス）
+   - `SENDER_NAME`（差出人名。例: YUマーケット）
+   - `SITE_URL`（`https://zennzai2007.github.io/akatuki/`）
+   - `WEBHOOK_SECRET`（自分で決める合言葉）
+4. **Database → Webhooks** で `applications` テーブルの Insert と Update に対する Webhook を作り、`notify` 関数を呼ぶようにする。HTTP ヘッダーに `x-webhook-secret` を追加し、3 で決めた合言葉を入れる。
+
+送信元アドレスが個人のものになるため、受信側には差出人としてそのアドレスが見えます。大学のメールサーバーで迷惑メール扱いになることがあるので、最初は自分宛てで届き方を確認してください。
+
 ### ローカルで開く
 
 ```bash
@@ -87,6 +103,7 @@ server.js      動作確認用の簡易HTTPサーバー
 - 登録できるのは `@yamaguchi-u.ac.jp` のメールアドレスだけです。
 - **通知はありません。** 申込・承認・完了があっても、メールやプッシュ通知は届きません。相手の画面は再読み込みしたときに更新されます。
 - **メールアドレスはほかの利用者に表示しません。** 相手への連絡は、取引中だけ使える「メッセージ」で行います。取引中でない人や第三者は読めません。
+- **メールで知らせるのは、申し込みと承認のときだけです**（上の設定をした場合）。メッセージや受け渡し完了では送りません。
 - **メッセージに通知はありません。** 画面を開いている間は10秒ごとに新着を取りに行きますが、閉じていると気づけません。
 - **通報は記録されるだけです。** 通報がついても出品は自動では消えません。運営者が Supabase の Table Editor で `reports` を見て、必要なら手で対処します（通報の一覧を見られるのは運営者だけで、アプリからは誰も読めません）。通報が届いたことの通知もないので、ときどき確認してください。
 - **禁止物は利用規約に一覧で書いてあります。** 出品フォームでも、当たらないことの確認にチェックが必要です。
