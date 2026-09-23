@@ -36,6 +36,17 @@ create table messages (
   body text not null,
   created_at timestamptz not null default now()
 );
+-- 出品者の評価。受け取った人が、取引ごとに1回だけ付けられる。
+create table ratings (
+  id uuid primary key default gen_random_uuid(),
+  application_id uuid references applications(id) on delete set null,
+  rater_id uuid not null references profiles(id) on delete cascade,
+  rated_id uuid not null references profiles(id) on delete cascade,
+  good boolean not null,
+  created_at timestamptz not null default now()
+);
+create unique index one_rating_per_application on ratings (application_id);
+
 -- 通報。運営者がダッシュボードで確認する。通報時点の出品内容とやりとりのコピーも残す。
 create table reports (
   id uuid primary key default gen_random_uuid(),
@@ -56,6 +67,7 @@ create index on applications (listing_id);
 create index on applications (applicant_id);
 create index on messages (application_id, created_at);
 create index on reports (created_at desc);
+create index on ratings (rated_id);
 -- 同じ出品に同じ人が二重に申し込めない（取消後の再申込は可）
 create unique index one_active_application
   on applications (listing_id, applicant_id)
@@ -83,6 +95,7 @@ alter table listings enable row level security;
 alter table applications enable row level security;
 alter table messages enable row level security;
 alter table reports enable row level security;
+alter table ratings enable row level security;
 
 create policy "read profiles" on profiles for select to authenticated using (true);
 create policy "update own profile" on profiles for update to authenticated
@@ -136,6 +149,21 @@ create policy "send report" on reports for insert to authenticated
 -- select ポリシーを作らないので、アプリからは誰も読めない（ダッシュボードで確認する）
 revoke update, delete on reports from anon, authenticated;
 
+-- 評価は自分が付けたものだけ読める（合計は rating_summary() で取る）
+create policy "read own ratings" on ratings for select to authenticated
+  using ((select auth.uid()) = rater_id);
+-- 取引完了した申込者が、その出品者を1回だけ評価できる
+create policy "rate after done" on ratings for insert to authenticated
+  with check ((select auth.uid()) = rater_id
+    and rated_id <> (select auth.uid())
+    and not public.is_blocked()
+    and exists (select 1 from applications ap join listings l on l.id = ap.listing_id
+                where ap.id = application_id
+                  and ap.status = '取引完了'
+                  and ap.applicant_id = (select auth.uid())
+                  and l.owner_id = rated_id));
+revoke update, delete on ratings from anon, authenticated;
+
 -- ========== 登録時: ドメイン制限 + profiles 自動作成 ==========
 create or replace function public.on_auth_user_created() returns trigger
 language plpgsql security definer set search_path = '' as $$
@@ -148,6 +176,17 @@ begin
 end $$;
 create trigger on_auth_user_created after insert on auth.users
   for each row execute function public.on_auth_user_created();
+
+-- ========== 評価の合計（誰が付けたかは返さない） ==========
+create or replace function public.rating_summary(user_id uuid)
+returns json language sql security definer set search_path = '' stable as $$
+  select json_build_object(
+    'good', count(*) filter (where good),
+    'total', count(*)
+  ) from public.ratings where rated_id = user_id;
+$$;
+revoke execute on function public.rating_summary(uuid) from public, anon;
+grant execute on function public.rating_summary(uuid) to authenticated;
 
 -- ========== RPC: 承認（出品者のみ） ==========
 create or replace function public.approve_application(app_id uuid)
