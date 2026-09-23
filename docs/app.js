@@ -248,6 +248,11 @@
     return allProducts().filter(function (item) { return item.owner_id === cache.me; });
   }
 
+  // 自分の出品は探す画面には出さない（「出品中の商品」から見る）。
+  function browsableProducts() {
+    return openProducts().filter(function (item) { return item.owner_id !== cache.me; });
+  }
+
   function productById(id) {
     var found = allProducts().filter(function (item) { return String(item.id) === String(id); });
     return found[0] || null;
@@ -687,7 +692,7 @@
     function render() {
       var checked = [];
       each(categories.querySelectorAll("input:checked"), function (box) { checked.push(box.value); });
-      var items = openProducts().filter(function (item) {
+      var items = browsableProducts().filter(function (item) {
         return checked.length === 0 || checked.indexOf(item.category) >= 0;
       });
 
@@ -712,7 +717,7 @@
 
     function render() {
       fillGrid($("search-results"), $("search-empty"),
-        openProducts().filter(function (item) {
+        browsableProducts().filter(function (item) {
           return filters.matches(item, input.value.trim());
         }));
     }
@@ -745,7 +750,7 @@
 
       var list = $("results-list");
       list.innerHTML = "";
-      var items = openProducts().filter(function (item) {
+      var items = browsableProducts().filter(function (item) {
         return search.filters.matches(item, keyword);
       });
       items.forEach(function (item) { list.appendChild(makeResultCard(item)); });
